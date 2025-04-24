@@ -208,7 +208,7 @@ export default function SangreSVG() {
                   style={{
                     fill: '#2a2a2a',
                     fontSize: '128px',
-                    fontFamily: 'Architype',
+                    fontFamily: '"Architype", Arial, sans-serif'
                   }}
                 >
                   {char}
