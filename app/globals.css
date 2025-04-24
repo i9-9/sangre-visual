@@ -26,6 +26,13 @@ body {
   font-family: Arial, Helvetica, sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  margin: 0;
+  padding: 0;
+  transition: background-color 0.1s ease;
+}
+
+body.inverted {
+  background: #000;
 }
 
 * {
@@ -51,7 +58,9 @@ a {
   display: flex;
   justify-content: center;
   align-items: center;
-  background: #fff;
+  background: transparent;
+  margin: 0;
+  padding: 0;
 }
 
 .container {
@@ -61,6 +70,7 @@ a {
   justify-content: center;
   align-items: center;
   padding: 2rem 4rem;
+  background: transparent;
 }
 
 .svg-container {
@@ -69,13 +79,48 @@ a {
   display: flex;
   justify-content: center;
   align-items: center;
-  background-color: white;
+  background-color: transparent;
   padding: 5vh 0;
-  transition: background-color 0.1s ease;
+  position: relative;
 }
 
-.svg-container.inverted {
-  background-color: black;
+.fullscreen-btn {
+  position: fixed;
+  bottom: 20px;
+  right: 20px;
+  background: rgba(42, 42, 42, 0.3);
+  border: none;
+  border-radius: 50%;
+  width: 40px;
+  height: 40px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background-color 0.3s ease;
+  z-index: 1000;
+}
+
+.fullscreen-btn:hover {
+  background: rgba(42, 42, 42, 0.5);
+}
+
+.inverted .fullscreen-btn {
+  background: rgba(255, 255, 255, 0.3);
+}
+
+.inverted .fullscreen-btn:hover {
+  background: rgba(255, 255, 255, 0.5);
+}
+
+.fullscreen-btn svg {
+  width: 20px;
+  height: 20px;
+  fill: #fff;
+}
+
+.inverted .fullscreen-btn svg {
+  fill: #000;
 }
 
 .svg-text {
