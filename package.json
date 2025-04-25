@@ -6,11 +6,16 @@
     "dev": "next dev --turbopack",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "render": "node scripts/render-video.js",
+    "screenshot": "node scripts/capture-screenshot.js"
   },
   "dependencies": {
+    "fluent-ffmpeg": "^2.1.2",
     "framer-motion": "^12.9.1",
     "next": "15.3.1",
+    "puppeteer": "^21.4.1",
+    "puppeteer-core": "^22.15.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0"
   },
@@ -22,5 +27,6 @@
     "eslint": "^9",
     "eslint-config-next": "15.3.1",
     "typescript": "^5"
-  }
+  },
+  "type": "module"
 }

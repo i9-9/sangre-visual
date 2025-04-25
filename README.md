@@ -1,3 +1,63 @@
+# Sangre Visual
+
+Proyecto de animación visual interactiva.
+
+## Renderización a Video
+
+Para crear un video de la animación, sigue estos pasos:
+
+1. **Instala las dependencias necesarias**:
+
+```bash
+npm install puppeteer fluent-ffmpeg
+```
+
+También necesitarás tener FFmpeg instalado en tu sistema:
+- **macOS**: `brew install ffmpeg`
+- **Linux**: `sudo apt-get install ffmpeg`
+- **Windows**: Descárgalo desde https://ffmpeg.org/download.html y configura la variable PATH
+
+2. **Ejecuta el script de renderizado**:
+
+```bash
+npm run render
+```
+
+Esto generará un video en la carpeta `output/sangre_animation.mp4`.
+
+3. **Personalización del renderizado**:
+
+Puedes modificar estos parámetros en el archivo `scripts/render-video.js`:
+
+- `FPS`: Cuadros por segundo (predeterminado: 30)
+- `DURATION`: Duración del video en segundos (predeterminado: 20)
+- `VIEWPORT`: Resolución del video (predeterminado: 1920x1080)
+- `URL`: URL de la aplicación (predeterminado: http://localhost:3000)
+
+Para renderizar un modo específico, puedes modificar la URL con parámetros:
+
+- Modo claro: `http://localhost:3000?render=true&mode=light`
+- Modo oscuro: `http://localhost:3000?render=true&mode=dark`
+- Modo video específico: `http://localhost:3000?render=true&mode=video&videoIndex=0`
+
+## Ejecución del Proyecto
+
+```bash
+# Instalar dependencias
+npm install
+
+# Ejecutar en modo desarrollo
+npm run dev
+
+# Construir para producción
+npm run build
+
+# Iniciar la versión de producción
+npm run start
+```
+
+Visita http://localhost:3000 en tu navegador para ver la aplicación.
+
 This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
 
 ## Getting Started

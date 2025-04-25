@@ -20,6 +20,8 @@ type Rect = {
   ry: number;
 };
 
+type DisplayMode = 'light' | 'dark' | 'video' | 'render';
+
 const patterns: Pattern[] = [
   {
     name: 'sequential',
@@ -63,14 +65,24 @@ const patterns: Pattern[] = [
   }
 ];
 
+const videoList = [
+  '/video/lava.mov',
+/*   '/video/galaxy.mov',
+  '/video/water.mov', */
+];
+
 export default function SangreCanvas() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const animationRef = useRef<number>(0);
+  const changingVideoRef = useRef<boolean>(false);
   const [rectangles, setRectangles] = useState<Rect[]>([]);
   const [currentPattern, setCurrentPattern] = useState(0);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [windowSize, setWindowSize] = useState({ width: 0, height: 0 });
+  const [displayMode, setDisplayMode] = useState<DisplayMode>('video');
+  const [currentVideoIndex, setCurrentVideoIndex] = useState(0);
+  const [videoLoaded, setVideoLoaded] = useState(false);
   const text = 'SANGRE';
   
   // Ajustes de animación
@@ -82,12 +94,14 @@ export default function SangreCanvas() {
     randomness: 0.05,           // 0-1: Nivel de aleatoriedad en animaciones
     waveIntensity: 0.8,         // 0-1: Intensidad de efecto ondulatorio
     waveSpeed: 0.0001,          // Velocidad de propagación de ondas
-    pulseRange: [0.2, 1.0],     // Rango de opacidad para pulsos
+    pulseRange: [0.5, 1.0],     // Rango de opacidad para pulsos
     // Nuevos parámetros
-    useVideoBackground: true,   // Usar video como fondo en lugar de color sólido
-    videoPath: '/video/lava.mov', // Ruta al video de fondo
+    useVideoBackground: false,   // Controlado automáticamente por displayMode
+    videoPath: videoList[0],     // Ruta al video de fondo actual
     videoOpacity: 1.0,          // Opacidad del video de fondo
-    darkMode: false,             // true = modo oscuro, false = modo claro
+    darkMode: false,            // Controlado automáticamente por displayMode
+    displayModeInterval: 45,    // Segundos antes de cambiar de modo (light/dark/video)
+    renderMode: false,          // Modo especial para renderizado de video
     backgroundGlow: {
       enabled: false,            // Activar/desactivar efecto de glow en el fondo
       intensity: 1,          // 0-1: Intensidad del efecto de glow (más sutil)
@@ -120,6 +134,134 @@ export default function SangreCanvas() {
   });
   
   const svgViewBox = { width: 1026.91, height: 986.75 };
+
+  // Detectar si estamos en modo de renderizado desde URL
+  useEffect(() => {
+    // Comprobar si estamos en un contexto de navegador
+    if (typeof window !== 'undefined') {
+      const urlParams = new URLSearchParams(window.location.search);
+      const renderParam = urlParams.get('render');
+      if (renderParam === 'true') {
+        console.log('Activando modo de renderizado');
+        animSettings.renderMode = true;
+        
+        // Establecer modo para el renderizado
+        const mode = urlParams.get('mode') as DisplayMode;
+        if (mode && ['light', 'dark', 'video'].includes(mode)) {
+          setDisplayMode(mode);
+        }
+        
+        // Establecer índice de video si es necesario
+        const videoIndex = urlParams.get('videoIndex');
+        if (videoIndex && !isNaN(parseInt(videoIndex))) {
+          const index = parseInt(videoIndex);
+          if (index >= 0 && index < videoList.length) {
+            setCurrentVideoIndex(index);
+          }
+        }
+      }
+    }
+  }, []);
+
+  // Sincronizar displayMode con los ajustes apropiados
+  useEffect(() => {
+    // Evitar cambios si ya estamos en proceso de cambiar video
+    if (changingVideoRef.current) return;
+
+    // Actualizar configuración basada en el modo actual
+    switch (displayMode) {
+      case 'light':
+        animSettings.darkMode = false;
+        animSettings.useVideoBackground = false;
+        break;
+      case 'dark':
+        animSettings.darkMode = true;
+        animSettings.useVideoBackground = false;
+        break;
+      case 'video':
+        animSettings.useVideoBackground = true;
+        loadVideoSafely();
+        break;
+      case 'render':
+        // Modo especial para renderizado, sin cambios automáticos
+        break;
+    }
+  }, [displayMode, currentVideoIndex]);
+
+  // Función para cargar videos de manera segura
+  const loadVideoSafely = async () => {
+    if (!videoRef.current) return;
+    
+    // Marcar que estamos cambiando video
+    changingVideoRef.current = true;
+    setVideoLoaded(false);
+    
+    try {
+      // Detener cualquier reproducción anterior
+      videoRef.current.pause();
+      
+      // Esperar un momento para asegurar que se detuvo
+      await new Promise(resolve => setTimeout(resolve, 50));
+      
+      console.log("Cargando video:", videoList[currentVideoIndex]);
+      animSettings.videoPath = videoList[currentVideoIndex];
+      videoRef.current.src = animSettings.videoPath;
+      videoRef.current.load();
+      
+      // Esperar a que el video esté listo antes de reproducir
+      videoRef.current.onloadeddata = async () => {
+        if (!videoRef.current) return;
+        
+        console.log("Video cargado, reproduciendo...");
+        try {
+          await videoRef.current.play();
+          console.log("Video reproduciéndose correctamente");
+          setVideoLoaded(true);
+        } catch (error) {
+          console.error("Error al reproducir:", error);
+        } finally {
+          // Ya no estamos cambiando video
+          changingVideoRef.current = false;
+        }
+      };
+      
+      // Manejar errores de carga
+      videoRef.current.onerror = () => {
+        console.error("Error al cargar el video");
+        changingVideoRef.current = false;
+        setVideoLoaded(false);
+      };
+    } catch (error) {
+      console.error("Error en la secuencia de carga:", error);
+      changingVideoRef.current = false;
+    }
+  };
+
+  // Cambiar el modo de visualización periódicamente
+  useEffect(() => {
+    // No cambiar automáticamente en modo de renderizado
+    if (animSettings.renderMode) return;
+    
+    const intervalId = setInterval(() => {
+      // No cambiar si estamos en proceso de cambio de video
+      if (changingVideoRef.current) return;
+      
+      setDisplayMode(prevMode => {
+        // Rotar entre los tres modos
+        switch (prevMode) {
+          case 'light': return 'dark';
+          case 'dark': return 'video';
+          case 'video': 
+            // Al cambiar de video a light, avanzar al siguiente video
+            setCurrentVideoIndex(prev => (prev + 1) % videoList.length);
+            return 'light';
+          default: return 'light';
+        }
+      });
+    }, animSettings.displayModeInterval * 1000);
+
+    return () => clearInterval(intervalId);
+  }, [animSettings.displayModeInterval, animSettings.renderMode]);
 
   // Update window size
   useEffect(() => {
@@ -324,16 +466,44 @@ export default function SangreCanvas() {
         ctx.fillStyle = animSettings.darkMode ? '#000000' : '#ffffff';
         ctx.fillRect(0, 0, windowSize.width, windowSize.height);
       } else {
-        // Si usamos video, dibujamos el video en el fondo
-        if (videoRef.current) {
+        // Si usamos video, dibujamos el video en el fondo manteniéndolo en proporción
+        if (videoRef.current && videoRef.current.readyState >= 2 && videoLoaded) { // HAVE_CURRENT_DATA y video cargado
           ctx.globalAlpha = animSettings.videoOpacity;
+          
+          // Calcular dimensiones para mantener la proporción del video
+          const videoRatio = videoRef.current.videoWidth / videoRef.current.videoHeight;
+          const canvasRatio = windowSize.width / windowSize.height;
+          
+          let drawWidth, drawHeight, offsetX = 0, offsetY = 0;
+          
+          if (videoRatio > canvasRatio) {
+            // El video es más ancho proporcionalmente que el canvas
+            drawHeight = windowSize.height;
+            drawWidth = drawHeight * videoRatio;
+            offsetX = (windowSize.width - drawWidth) / 2;
+          } else {
+            // El video es más alto proporcionalmente que el canvas
+            drawWidth = windowSize.width;
+            drawHeight = drawWidth / videoRatio;
+            offsetY = (windowSize.height - drawHeight) / 2;
+          }
+          
+          // Rellenar el fondo con negro primero
+          ctx.fillStyle = '#000000';
+          ctx.fillRect(0, 0, windowSize.width, windowSize.height);
+          
+          // Dibujar el video manteniendo la proporción
           ctx.drawImage(
             videoRef.current,
-            0, 0,
-            windowSize.width,
-            windowSize.height
+            offsetX, offsetY,
+            drawWidth, drawHeight
           );
+          
           ctx.globalAlpha = 1.0;
+        } else {
+          // Si el video no está listo, usar color negro como fallback
+          ctx.fillStyle = '#000000';
+          ctx.fillRect(0, 0, windowSize.width, windowSize.height);
         }
       }
       
@@ -446,19 +616,25 @@ export default function SangreCanvas() {
       
       // Dibujar texto estático
       if (animSettings.useVideoBackground) {
-        // Con video de fondo, texto siempre blanco
+        // Con video de fondo, texto siempre blanco sin contorno
         ctx.fillStyle = '#ffffff';
+        ctx.globalAlpha = 1.0; // Asegurar opacidad completa
       } else {
-        // Invertir color de texto según modo
-        ctx.fillStyle = animSettings.darkMode ? '#000000' : '#ffffff';
+        // Invertir color de texto según modo (negro en light, blanco en dark)
+        ctx.fillStyle = animSettings.darkMode ? '#ffffff' : '#000000';
       }
       ctx.font = `${animSettings.textPosition.fontSize}px ${animSettings.textPosition.fontFamily}`;
       ctx.textAlign = animSettings.textPosition.alignment as CanvasTextAlign;
       ctx.textBaseline = 'middle';
       ctx.globalAlpha = animSettings.textOpacity;
       
+      // Eliminar el contorno del texto
+      
       // Dibujar el texto en posición configurable
       ctx.fillText(text, animSettings.textPosition.x, animSettings.textPosition.y);
+      
+      // Restaurar opacidad global
+      ctx.globalAlpha = 1.0;
       
       ctx.restore();
       
@@ -471,18 +647,6 @@ export default function SangreCanvas() {
       cancelAnimationFrame(animationRef.current);
     };
   }, [rectangles, currentPattern, windowSize]);
-
-  // Video background setup
-  useEffect(() => {
-    if (animSettings.useVideoBackground && videoRef.current) {
-      videoRef.current.src = animSettings.videoPath;
-      videoRef.current.loop = true;
-      videoRef.current.muted = true;
-      videoRef.current.play().catch(error => {
-        console.error("Error playing video:", error);
-      });
-    }
-  }, [animSettings.useVideoBackground, animSettings.videoPath]);
 
   const toggleFullscreen = useCallback(async () => {
     if (!document.fullscreenElement) {
@@ -510,19 +674,24 @@ export default function SangreCanvas() {
         justifyContent: 'center'
       }}
     >
-      {animSettings.useVideoBackground && (
-        <video 
-          ref={videoRef}
-          style={{
-            position: 'absolute',
-            width: '100%',
-            height: '100%',
-            objectFit: 'cover',
-            zIndex: -1,
-            display: 'none' // Hidden, only used as source for canvas
-          }}
-        />
-      )}
+      {/* Video siempre presente pero oculto */}
+      <video 
+        ref={videoRef}
+        style={{
+          position: 'absolute',
+          width: '100%',
+          height: '100%',
+          objectFit: 'contain',
+          zIndex: -1,
+          display: 'none' // Hidden, only used as source for canvas
+        }}
+        muted
+        loop
+        autoPlay
+        playsInline
+        preload="auto"
+        onError={(e) => console.error("Error en video:", e)}
+      />
       <canvas
         ref={canvasRef}
         style={{
