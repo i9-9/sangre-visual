@@ -19,7 +19,6 @@ const patterns: Pattern[] = [
     name: 'sequential',
     animation: {
       opacity: [1, 0.2, 1],
-      scale: [1, 1.1, 1],
     },
     duration: 1,
     delay: 0.005,
@@ -27,8 +26,6 @@ const patterns: Pattern[] = [
   {
     name: 'pulse',
     animation: {
-      scale: [1, 1.2, 0.9, 1],
-      rotate: [0, 15, -15, 0],
       opacity: [1, 0.7, 1],
     },
     duration: 2,
@@ -37,7 +34,6 @@ const patterns: Pattern[] = [
   {
     name: 'pulse-individual',
     animation: {
-      scale: [1, 1.3, 1],
       opacity: [1, 0.3, 1],
     },
     duration: 1.5,
@@ -47,7 +43,6 @@ const patterns: Pattern[] = [
     name: 'wave',
     animation: {
       opacity: [1, 0.2, 1],
-      rotate: [0, 5, 0],
     },
     duration: 2.5,
     delay: 0.002,
@@ -55,7 +50,6 @@ const patterns: Pattern[] = [
   {
     name: 'fade',
     animation: {
-      scale: [1, 0.7, 1.2, 1],
       opacity: [1, 0.4, 0.8, 1],
     },
     duration: 2,
@@ -68,8 +62,8 @@ export default function SangreSVG() {
   const [elements, setElements] = useState<SVGElement[]>([]);
   const [currentPattern, setCurrentPattern] = useState(0);
   const [isFullscreen, setIsFullscreen] = useState(false);
-  const text = 'sgr9';
-  const LETTER_SPACING = 50;
+  const text = 'sangre';
+  const LETTER_SPACING = 55;
 
   useEffect(() => {
     fetch('/svg/sangre.svg')
@@ -128,7 +122,7 @@ export default function SangreSVG() {
         rx={rx}
         ry={ry}
         fill="#2a2a2a"
-        initial={{ opacity: 1, scale: 1, rotate: 0 }}
+        initial={{ opacity: 1, rotate: 0 }}
         animate={pattern.animation}
         transition={{
           duration: pattern.duration,
