@@ -65,6 +65,7 @@ const patterns: Pattern[] = [
 
 export default function SangreCanvas() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const videoRef = useRef<HTMLVideoElement>(null);
   const animationRef = useRef<number>(0);
   const [rectangles, setRectangles] = useState<Rect[]>([]);
   const [currentPattern, setCurrentPattern] = useState(0);
@@ -74,18 +75,21 @@ export default function SangreCanvas() {
   
   // Ajustes de animación
   const [animSettings] = useState({
-    individualModules: true,    // Animar módulos individualmente vs. por bloques
+    individualModules: false,    // Animar módulos individualmente vs. por bloques
     moduleVariance: 0.1,        // 0-1: Qué tanto varía la animación entre módulos cercanos
     animationSpeed: 0.6,       // Multiplicador de velocidad de animación (más bajo = más lento)
     patternDuration: 30,        // Segundos antes de cambiar de patrón
     randomness: 0.05,           // 0-1: Nivel de aleatoriedad en animaciones
     waveIntensity: 0.8,         // 0-1: Intensidad de efecto ondulatorio
     waveSpeed: 0.0001,          // Velocidad de propagación de ondas
-    pulseRange: [0.5, 1.0],     // Rango de opacidad para pulsos
+    pulseRange: [0.2, 1.0],     // Rango de opacidad para pulsos
     // Nuevos parámetros
+    useVideoBackground: true,   // Usar video como fondo en lugar de color sólido
+    videoPath: '/video/lava.mov', // Ruta al video de fondo
+    videoOpacity: 1.0,          // Opacidad del video de fondo
     darkMode: false,             // true = modo oscuro, false = modo claro
     backgroundGlow: {
-      enabled: true,            // Activar/desactivar efecto de glow en el fondo
+      enabled: false,            // Activar/desactivar efecto de glow en el fondo
       intensity: 1,          // 0-1: Intensidad del efecto de glow (más sutil)
       speed: 0.03,              // Velocidad del LFO triangular (más bajo = más lento)
       color: '#fff',         // Color base del fondo (negro)
@@ -315,9 +319,23 @@ export default function SangreCanvas() {
       // Calculate background glow effect
       const glowIntensity = calculateBackgroundGlow(time);
       
-      // Limpiar el canvas con el color base
-      ctx.fillStyle = animSettings.darkMode ? '#000000' : '#ffffff';
-      ctx.fillRect(0, 0, windowSize.width, windowSize.height);
+      // Limpiar el canvas con el color base si no hay video
+      if (!animSettings.useVideoBackground) {
+        ctx.fillStyle = animSettings.darkMode ? '#000000' : '#ffffff';
+        ctx.fillRect(0, 0, windowSize.width, windowSize.height);
+      } else {
+        // Si usamos video, dibujamos el video en el fondo
+        if (videoRef.current) {
+          ctx.globalAlpha = animSettings.videoOpacity;
+          ctx.drawImage(
+            videoRef.current,
+            0, 0,
+            windowSize.width,
+            windowSize.height
+          );
+          ctx.globalAlpha = 1.0;
+        }
+      }
       
       // Crear un gradiente radial para el efecto de glow
       if (animSettings.backgroundGlow.enabled && glowIntensity > 0) {
@@ -405,8 +423,12 @@ export default function SangreCanvas() {
         const saturation = animSettings.colorShift.saturation;
         const lightness = animSettings.colorShift.lightness;
         ctx.fillStyle = `hsl(${hue}, ${50 + saturation}%, ${20 + lightness}%)`;
+      } else if (animSettings.useVideoBackground) {
+        // Con video de fondo, siempre usamos módulos blancos semi-transparentes
+        ctx.fillStyle = '#ffffff';
       } else {
-        ctx.fillStyle = animSettings.darkMode ? '#2a2a2a' : '#000000';
+        // En modo normal, invertimos los colores según darkMode
+        ctx.fillStyle = animSettings.darkMode ? '#ffffff' : '#000000';
       }
       
       rectangles.forEach((rect, index) => {
@@ -423,7 +445,13 @@ export default function SangreCanvas() {
       });
       
       // Dibujar texto estático
-      ctx.fillStyle = animSettings.darkMode ? '#ffffff' : '#000000';
+      if (animSettings.useVideoBackground) {
+        // Con video de fondo, texto siempre blanco
+        ctx.fillStyle = '#ffffff';
+      } else {
+        // Invertir color de texto según modo
+        ctx.fillStyle = animSettings.darkMode ? '#000000' : '#ffffff';
+      }
       ctx.font = `${animSettings.textPosition.fontSize}px ${animSettings.textPosition.fontFamily}`;
       ctx.textAlign = animSettings.textPosition.alignment as CanvasTextAlign;
       ctx.textBaseline = 'middle';
@@ -443,6 +471,18 @@ export default function SangreCanvas() {
       cancelAnimationFrame(animationRef.current);
     };
   }, [rectangles, currentPattern, windowSize]);
+
+  // Video background setup
+  useEffect(() => {
+    if (animSettings.useVideoBackground && videoRef.current) {
+      videoRef.current.src = animSettings.videoPath;
+      videoRef.current.loop = true;
+      videoRef.current.muted = true;
+      videoRef.current.play().catch(error => {
+        console.error("Error playing video:", error);
+      });
+    }
+  }, [animSettings.useVideoBackground, animSettings.videoPath]);
 
   const toggleFullscreen = useCallback(async () => {
     if (!document.fullscreenElement) {
@@ -470,6 +510,19 @@ export default function SangreCanvas() {
         justifyContent: 'center'
       }}
     >
+      {animSettings.useVideoBackground && (
+        <video 
+          ref={videoRef}
+          style={{
+            position: 'absolute',
+            width: '100%',
+            height: '100%',
+            objectFit: 'cover',
+            zIndex: -1,
+            display: 'none' // Hidden, only used as source for canvas
+          }}
+        />
+      )}
       <canvas
         ref={canvasRef}
         style={{
