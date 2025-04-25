@@ -34,7 +34,7 @@ const patterns: Pattern[] = [
   {
     name: 'pulse',
     animation: {
-      opacity: [1, 0.7, 1],
+      opacity: [1, 0.2, 1],
     },
     duration: 2,
     delay: 0.003,
@@ -42,7 +42,7 @@ const patterns: Pattern[] = [
   {
     name: 'pulse-individual',
     animation: {
-      opacity: [1, 0.3, 1],
+      opacity: [1, 0.1, 1],
     },
     duration: 1.5,
     delay: 0.004,
@@ -50,7 +50,7 @@ const patterns: Pattern[] = [
   {
     name: 'wave',
     animation: {
-      opacity: [1, 0.2, 1],
+      opacity: [1, 0.05, 1],
     },
     duration: 2.5,
     delay: 0.002,
@@ -58,7 +58,7 @@ const patterns: Pattern[] = [
   {
     name: 'fade',
     animation: {
-      opacity: [1, 0.4, 0.8, 1],
+      opacity: [1, 0.2, 0.9, 1],
     },
     duration: 2,
     delay: 0.003,
@@ -67,13 +67,13 @@ const patterns: Pattern[] = [
 
 const videoList = [
   '/video/lava.mov',
-/*   '/video/galaxy.mov',
-  '/video/water.mov', */
+  '/video/lava2.mov',
 ];
 
 export default function SangreCanvas() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
+  const secondaryVideoRef = useRef<HTMLVideoElement>(null);
   const animationRef = useRef<number>(0);
   const changingVideoRef = useRef<boolean>(false);
   const [rectangles, setRectangles] = useState<Rect[]>([]);
@@ -83,18 +83,19 @@ export default function SangreCanvas() {
   const [displayMode, setDisplayMode] = useState<DisplayMode>('video');
   const [currentVideoIndex, setCurrentVideoIndex] = useState(0);
   const [videoLoaded, setVideoLoaded] = useState(false);
+  const [activeVideoRef, setActiveVideoRef] = useState<'primary' | 'secondary'>('primary');
   const text = 'SANGRE';
   
   // Ajustes de animación
   const [animSettings] = useState({
-    individualModules: false,    // Animar módulos individualmente vs. por bloques
-    moduleVariance: 0.1,        // 0-1: Qué tanto varía la animación entre módulos cercanos
-    animationSpeed: 0.6,       // Multiplicador de velocidad de animación (más bajo = más lento)
-    patternDuration: 30,        // Segundos antes de cambiar de patrón
+    individualModules: true,    // Animar módulos individualmente vs. por bloques
+    moduleVariance: 1,        // 0-1: Qué tanto varía la animación entre módulos cercanos
+    animationSpeed: 0.5,       // Multiplicador de velocidad de animación (más bajo = más lento)
+    patternDuration: 20,        // Segundos antes de cambiar de patrón
     randomness: 0.05,           // 0-1: Nivel de aleatoriedad en animaciones
-    waveIntensity: 0.8,         // 0-1: Intensidad de efecto ondulatorio
+    waveIntensity: 1,         // 0-1: Intensidad de efecto ondulatorio
     waveSpeed: 0.0001,          // Velocidad de propagación de ondas
-    pulseRange: [0.5, 1.0],     // Rango de opacidad para pulsos
+    pulseRange: [0.2, 1.0],     // Rango de opacidad para pulsos
     // Nuevos parámetros
     useVideoBackground: false,   // Controlado automáticamente por displayMode
     videoPath: videoList[0],     // Ruta al video de fondo actual
@@ -103,8 +104,8 @@ export default function SangreCanvas() {
     displayModeInterval: 45,    // Segundos antes de cambiar de modo (light/dark/video)
     renderMode: false,          // Modo especial para renderizado de video
     backgroundGlow: {
-      enabled: false,            // Activar/desactivar efecto de glow en el fondo
-      intensity: 1,          // 0-1: Intensidad del efecto de glow (más sutil)
+      enabled: true,            // Activar/desactivar efecto de glow en el fondo
+      intensity: 0.1 ,          // 0-1: Intensidad del efecto de glow (más sutil)
       speed: 0.03,              // Velocidad del LFO triangular (más bajo = más lento)
       color: '#fff',         // Color base del fondo (negro)
       glowColor: '#f0f0ff',     // Color del glow (ligeramente azulado)
@@ -188,73 +189,185 @@ export default function SangreCanvas() {
     }
   }, [displayMode, currentVideoIndex]);
 
-  // Función para cargar videos de manera segura
-  const loadVideoSafely = async () => {
-    if (!videoRef.current) return;
-    
-    // Marcar que estamos cambiando video
-    changingVideoRef.current = true;
-    
-    try {
-      // Crear un nuevo elemento video temporal para precargar
-      const tempVideo = document.createElement('video');
-      tempVideo.muted = true;
-      tempVideo.src = videoList[currentVideoIndex];
-      tempVideo.loop = true;
+  // Forzar precarga de todos los videos al inicio
+  useEffect(() => {
+    // Precargar todos los videos al iniciar
+    const preloadAllVideos = async () => {
+      if (videoList.length === 0) return;
       
-      // Precargar el video
-      console.log("Precargando nuevo video:", videoList[currentVideoIndex]);
+      console.log("Precargando todos los videos al inicio");
       
-      // Esperar a que se cargue el video
-      await new Promise((resolve, reject) => {
-        tempVideo.onloadeddata = resolve;
-        tempVideo.onerror = reject;
-        tempVideo.load();
-      });
-      
-      // Mantener el video antiguo visible hasta que el nuevo esté listo
+      // Configurar el video primario con el primer video
       if (videoRef.current) {
-        // Establecer la opacidad del video actual en 0 gradualmente
-        const fadeOutDuration = 500; // ms
-        const startTime = performance.now();
+        // Esperar a que termine cualquier operación pendiente
+        videoRef.current.pause();
         
-        const fadeOut = (currentTime: number) => {
-          const elapsed = currentTime - startTime;
-          const opacity = Math.max(0, 1 - elapsed / fadeOutDuration);
+        // Usar un evento de carga para reproducir el video cuando esté listo
+        const handlePrimaryLoaded = async () => {
+          if (!videoRef.current) return;
           
-          if (videoRef.current) {
-            videoRef.current.style.opacity = String(opacity);
-          }
-          
-          if (elapsed < fadeOutDuration) {
-            requestAnimationFrame(fadeOut);
-          } else {
-            // Ya se completó el fade-out, actualizar la fuente
+          videoRef.current.removeEventListener('loadeddata', handlePrimaryLoaded);
+          try {
+            // Solo intentar reproducir cuando el video esté completamente cargado
+            if (videoRef.current && videoRef.current.readyState >= 3) {
+              await videoRef.current.play();
+              console.log("Video primario iniciado correctamente");
+            }
+          } catch (error) {
+            console.error("Error al reproducir video primario:", error);
+            // Intentar reproducir de nuevo con muted como atributo
             if (videoRef.current) {
-              // Actualizar la fuente y reproducir
-              videoRef.current.src = videoList[currentVideoIndex];
-              videoRef.current.load();
-              videoRef.current.play().catch(console.error);
-              
-              // Fade-in
-              videoRef.current.style.opacity = '0';
-              requestAnimationFrame(() => {
-                if (videoRef.current) {
-                  videoRef.current.style.opacity = '1';
-                  videoRef.current.style.transition = 'opacity 500ms ease-in-out';
-                }
-              });
+              videoRef.current.setAttribute("muted", "");
+              try {
+                await videoRef.current.play();
+              } catch (e) {
+                console.error("Segundo intento fallido:", e);
+              }
             }
           }
         };
         
-        // Iniciar el fade-out
-        requestAnimationFrame(fadeOut);
+        videoRef.current.addEventListener('loadeddata', handlePrimaryLoaded);
+        videoRef.current.muted = true;
+        videoRef.current.loop = true;
+        videoRef.current.playsInline = true;
+        videoRef.current.autoplay = false; // Desactivar autoplay para evitar competencia
+        videoRef.current.preload = "auto";
+        videoRef.current.src = videoList[0];
+        videoRef.current.load();
       }
       
+      // Si hay un segundo video, precargarlo en el elemento secundario
+      if (videoList.length > 1 && secondaryVideoRef.current) {
+        // Esperar a que termine cualquier operación pendiente
+        secondaryVideoRef.current.pause();
+        
+        // Usar un evento de carga para reproducir el video cuando esté listo
+        const handleSecondaryLoaded = async () => {
+          if (!secondaryVideoRef.current) return;
+          
+          secondaryVideoRef.current.removeEventListener('loadeddata', handleSecondaryLoaded);
+          try {
+            // Solo intentar reproducir cuando el video esté completamente cargado
+            if (secondaryVideoRef.current && secondaryVideoRef.current.readyState >= 3) {
+              await secondaryVideoRef.current.play();
+              console.log("Video secundario precargado correctamente");
+            }
+          } catch (error) {
+            console.error("Error al precargar video secundario:", error);
+            if (secondaryVideoRef.current) {
+              secondaryVideoRef.current.setAttribute("muted", "");
+              try {
+                await secondaryVideoRef.current.play();
+              } catch (e) {
+                console.error("Segundo intento fallido para video secundario:", e);
+              }
+            }
+          }
+        };
+        
+        secondaryVideoRef.current.addEventListener('loadeddata', handleSecondaryLoaded);
+        secondaryVideoRef.current.muted = true;
+        secondaryVideoRef.current.loop = true;
+        secondaryVideoRef.current.playsInline = true;
+        secondaryVideoRef.current.autoplay = false; // Desactivar autoplay para evitar competencia
+        secondaryVideoRef.current.preload = "auto";
+        secondaryVideoRef.current.style.opacity = '0';
+        secondaryVideoRef.current.src = videoList[1];
+        secondaryVideoRef.current.load();
+      }
+      
+      setVideoLoaded(true);
+    };
+
+    preloadAllVideos();
+  }, []);
+
+  // Función para cargar videos de manera segura
+  const loadVideoSafely = async () => {
+    if (!videoRef.current || !secondaryVideoRef.current) return;
+    
+    // Si es la primera carga y todavía no se ha cargado ningún video
+    if (!videoLoaded && currentVideoIndex === 0 && videoRef.current.readyState < 2) {
+      console.log("Inicializando videos por primera vez");
+      // No intentamos cargar aquí, ya lo hace el useEffect de preloadAllVideos
+      return;
+    }
+    
+    // Evitar interrupciones de carga si ya estamos cambiando video
+    if (changingVideoRef.current) return;
+    
+    // Para cambios de video normales
+    // Marcar que estamos cambiando video
+    changingVideoRef.current = true;
+    
+    try {
+      // Determinar cuál video está inactivo para precargar el nuevo
+      const inactiveVideoRef = activeVideoRef === 'primary' ? secondaryVideoRef : videoRef;
+      const activeVideo = activeVideoRef === 'primary' ? videoRef.current : secondaryVideoRef.current;
+      
+      // Configurar el video inactivo con la nueva fuente
+      if (inactiveVideoRef.current) {
+        // Detener cualquier reproducción actual
+        inactiveVideoRef.current.pause();
+        
+        // Configurar el video
+        inactiveVideoRef.current.muted = true;
+        inactiveVideoRef.current.loop = true;
+        inactiveVideoRef.current.style.opacity = '0';
+        
+        // Definir un manejador para reproducir cuando esté listo
+        const handleVideoLoaded = async () => {
+          if (!inactiveVideoRef.current) return;
+          
+          // Eliminar el evento para evitar llamadas duplicadas
+          inactiveVideoRef.current.removeEventListener('loadeddata', handleVideoLoaded);
+          
+          // Solo reproducir si el video está en un estado adecuado
+          if (inactiveVideoRef.current.readyState >= 3) {
+            try {
+              await inactiveVideoRef.current.play();
+            } catch (error) {
+              console.error("Error playing video:", error);
+              // Verificar si el error tiene la propiedad name
+              if (error instanceof Error && error.name === "NotAllowedError") {
+                inactiveVideoRef.current.setAttribute("muted", "");
+                inactiveVideoRef.current.play().catch(e => 
+                  console.error("Failed to recover from autoplay error:", e)
+                );
+              }
+            }
+            
+            // Hacer visible el nuevo video
+            inactiveVideoRef.current.style.transition = 'opacity 500ms ease-in-out';
+            inactiveVideoRef.current.style.opacity = '1';
+          }
+        };
+        
+        // Agregar el evento y cargar el video
+        inactiveVideoRef.current.addEventListener('loadeddata', handleVideoLoaded);
+        inactiveVideoRef.current.src = videoList[currentVideoIndex];
+        console.log("Precargando nuevo video:", videoList[currentVideoIndex]);
+        inactiveVideoRef.current.load();
+      }
+      
+      // Desvanecer el video actual
+      if (activeVideo) {
+        activeVideo.style.transition = 'opacity 500ms ease-in-out';
+        activeVideo.style.opacity = '0';
+      }
+      
+      // Esperar a que termine la transición
+      await new Promise(resolve => setTimeout(resolve, 500)); // 500ms para la transición
+      
+      // Cambiar la referencia activa
+      setActiveVideoRef(activeVideoRef === 'primary' ? 'secondary' : 'primary');
+      
+      // Actualizar la configuración
       console.log("Video precargado correctamente");
       animSettings.videoPath = videoList[currentVideoIndex];
       setVideoLoaded(true);
+      
     } catch (error) {
       console.error("Error al precargar video:", error);
       setVideoLoaded(false);
@@ -505,11 +618,13 @@ export default function SangreCanvas() {
         ctx.fillRect(0, 0, windowSize.width, windowSize.height);
       } else {
         // Si usamos video, dibujamos el video en el fondo manteniéndolo en proporción
-        if (videoRef.current && videoRef.current.readyState >= 2 && videoLoaded) { // HAVE_CURRENT_DATA y video cargado
+        const currentVideoElement = activeVideoRef === 'primary' ? videoRef.current : secondaryVideoRef.current;
+        
+        if (currentVideoElement && currentVideoElement.readyState >= 2 && videoLoaded) { // HAVE_CURRENT_DATA y video cargado
           ctx.globalAlpha = animSettings.videoOpacity;
           
           // Calcular dimensiones para mantener la proporción del video
-          const videoRatio = videoRef.current.videoWidth / videoRef.current.videoHeight;
+          const videoRatio = currentVideoElement.videoWidth / currentVideoElement.videoHeight;
           const canvasRatio = windowSize.width / windowSize.height;
           
           let drawWidth, drawHeight, offsetX = 0, offsetY = 0;
@@ -532,7 +647,7 @@ export default function SangreCanvas() {
           
           // Dibujar el video manteniendo la proporción
           ctx.drawImage(
-            videoRef.current,
+            currentVideoElement,
             offsetX, offsetY,
             drawWidth, drawHeight
           );
@@ -686,6 +801,135 @@ export default function SangreCanvas() {
     };
   }, [rectangles, currentPattern, windowSize]);
 
+  // Video background setup
+  useEffect(() => {
+    // Configurar ambos videos
+    const setupVideo = (video: HTMLVideoElement | null) => {
+      if (!video) return;
+      
+      // Configuración simple para evitar el flicker en el loop
+      video.crossOrigin = "anonymous";
+      video.loop = true;
+      video.muted = true;
+      video.playsInline = true;
+      
+      // Habilitar decodificación acelerada por hardware
+      video.style.transform = 'translateZ(0)'; 
+      
+      // Mejorar rendimiento
+      video.style.backfaceVisibility = 'hidden';
+      video.style.willChange = 'opacity';
+      
+      // Usar buffer más grande
+      if ('mozHasAudio' in video || 'webkitAudioDecodedByteCount' in video) {
+        try {
+          // Firefox/Chrome specific attribute
+          video.preload = 'auto';  
+          
+          // Solo aplicar atributos específicos de Firefox si estamos en Firefox
+          if ('mozHasAudio' in video) {
+            // Usar unknown como intermediario para hacer el cast
+            const firefoxVideo = video as unknown;
+            // Ahora hacemos el cast seguro
+            const videoWithMozFeatures = firefoxVideo as { mozPreservesPitch?: boolean };
+            
+            if (typeof videoWithMozFeatures.mozPreservesPitch !== 'undefined') {
+              videoWithMozFeatures.mozPreservesPitch = false;
+            }
+          }
+        } catch (e) {
+          console.warn('Browser does not support some video attributes', e);
+        }
+      }
+      
+      // Deshabilitar transiciones CSS que podrían causar flicker
+      video.style.transition = 'opacity 500ms ease-in-out';
+      
+      // Asegurar reproducción
+      video.play().catch(error => {
+        console.error("Error en setupVideo:", error);
+        // Intento adicional con muted como atributo
+        video.setAttribute("muted", "");
+        video.play().catch(e => console.error("Falló intento adicional:", e));
+      });
+    };
+    
+    setupVideo(videoRef.current);
+    setupVideo(secondaryVideoRef.current);
+    
+    // Preparar videos precargados
+    const preloadVideos = () => {
+      videoList.forEach(videoUrl => {
+        const link = document.createElement('link');
+        link.rel = 'preload';
+        link.href = videoUrl;
+        link.as = 'video';
+        document.head.appendChild(link);
+      });
+    };
+    
+    preloadVideos();
+    
+    // Mejorar la técnica de loop suave
+    const handleTimeUpdate = () => {
+      const primaryVideo = videoRef.current;
+      const secondaryVideo = secondaryVideoRef.current;
+      const currentVideo = activeVideoRef === 'primary' ? primaryVideo : secondaryVideo;
+      
+      if (!currentVideo || currentVideo.paused) return;
+      
+      // Detectar cuándo estamos cerca del final para realizar un loop suave
+      // Ajustar este valor según la duración del video para evitar saltos visibles
+      const endThreshold = 0.3; // 300ms antes del final
+      
+      if (currentVideo.duration > 0 && 
+          currentVideo.currentTime > currentVideo.duration - endThreshold) {
+        
+        // Si estamos aún más cerca del final (últimos 100ms), preparar el reinicio inmediato
+        if (currentVideo.currentTime > currentVideo.duration - 0.1) {
+          // Usar requestVideoFrameCallback si está disponible (Chrome/Edge)
+          if ('requestVideoFrameCallback' in HTMLVideoElement.prototype) {
+            try {
+              // Experimental API
+              // Define un tipo para el videoElement con el método experimental
+              type VideoElementWithFrameCallback = HTMLVideoElement & {
+                requestVideoFrameCallback: (callback: () => void) => number;
+              };
+              (currentVideo as VideoElementWithFrameCallback).requestVideoFrameCallback(() => {
+                currentVideo.currentTime = 0;
+              });
+            } catch (e) {
+              console.warn('requestVideoFrameCallback failed', e);
+              // Fallback
+              requestAnimationFrame(() => {
+                if (currentVideo) currentVideo.currentTime = 0;
+              });
+            }
+          } else {
+            // Fallback para otros navegadores
+            requestAnimationFrame(() => {
+              // Verificar si el elemento aún existe y es reproducible
+              if (currentVideo && currentVideo.readyState >= 2) {
+                currentVideo.currentTime = 0;
+              }
+            });
+          }
+        }
+      }
+    };
+    
+    const primaryVideo = videoRef.current;
+    const secondaryVideo = secondaryVideoRef.current;
+    
+    if (primaryVideo) primaryVideo.addEventListener('timeupdate', handleTimeUpdate);
+    if (secondaryVideo) secondaryVideo.addEventListener('timeupdate', handleTimeUpdate);
+    
+    return () => {
+      if (primaryVideo) primaryVideo.removeEventListener('timeupdate', handleTimeUpdate);
+      if (secondaryVideo) secondaryVideo.removeEventListener('timeupdate', handleTimeUpdate);
+    };
+  }, [activeVideoRef]);
+
   const toggleFullscreen = useCallback(async () => {
     if (!document.fullscreenElement) {
       await document.documentElement.requestFullscreen();
@@ -712,7 +956,7 @@ export default function SangreCanvas() {
         justifyContent: 'center'
       }}
     >
-      {/* Video siempre presente pero oculto */}
+      {/* Video principal */}
       <video 
         ref={videoRef}
         style={{
@@ -721,16 +965,71 @@ export default function SangreCanvas() {
           height: '100%',
           objectFit: 'contain',
           zIndex: -1,
-          display: 'none', // Hidden, only used as source for canvas
+          opacity: activeVideoRef === 'primary' ? 1 : 0,
           transition: 'opacity 500ms ease-in-out'
         }}
         muted
         loop
-        autoPlay
         playsInline
         preload="auto"
-        onError={(e) => console.error("Error en video:", e)}
-      />
+        onPlay={() => console.log("Video primario reproduciendo")}
+        onError={(e) => {
+          // More detailed error logging
+          const video = e.currentTarget;
+          console.error("Error en video primario:", {
+            event: e,
+            src: video.src,
+            networkState: video.networkState,
+            readyState: video.readyState,
+            error: video.error ? {
+              code: video.error.code,
+              message: video.error.message
+            } : null
+          });
+          
+          // No intentar recuperación automática aquí para evitar ciclos de carga
+        }}
+      >
+        {/* Quitar source tags para evitar cargas competitivas */}
+      </video>
+      
+      {/* Video secundario (para transiciones suaves) */}
+      <video 
+        ref={secondaryVideoRef}
+        style={{
+          position: 'absolute',
+          width: '100%',
+          height: '100%',
+          objectFit: 'contain',
+          zIndex: -1,
+          opacity: activeVideoRef === 'secondary' ? 1 : 0,
+          transition: 'opacity 500ms ease-in-out'
+        }}
+        muted
+        loop
+        playsInline
+        preload="auto"
+        onPlay={() => console.log("Video secundario reproduciendo")}
+        onError={(e) => {
+          // More detailed error logging
+          const video = e.currentTarget;
+          console.error("Error en video secundario:", {
+            event: e,
+            src: video.src,
+            networkState: video.networkState,
+            readyState: video.readyState,
+            error: video.error ? {
+              code: video.error.code,
+              message: video.error.message
+            } : null
+          });
+          
+          // No intentar recuperación automática aquí para evitar ciclos de carga
+        }}
+      >
+        {/* Quitar source tags para evitar cargas competitivas */}
+      </video>
+      
       <canvas
         ref={canvasRef}
         style={{

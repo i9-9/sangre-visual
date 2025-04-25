@@ -8,7 +8,8 @@
     "start": "next start",
     "lint": "next lint",
     "render": "node scripts/render-video.js",
-    "screenshot": "node scripts/capture-screenshot.js"
+    "screenshot": "node scripts/capture-screenshot.js",
+    "record": "node scripts/record-video.js"
   },
   "dependencies": {
     "fluent-ffmpeg": "^2.1.2",
