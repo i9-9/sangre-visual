@@ -68,6 +68,7 @@ const patterns: Pattern[] = [
 const videoList = [
   '/video/lava.mov',
   '/video/lava2.mov',
+  '/video/lava3.mov',
 ];
 
 export default function SangreCanvas() {
@@ -104,7 +105,7 @@ export default function SangreCanvas() {
     displayModeInterval: 45,    // Segundos antes de cambiar de modo (light/dark/video)
     renderMode: false,          // Modo especial para renderizado de video
     backgroundGlow: {
-      enabled: true,            // Activar/desactivar efecto de glow en el fondo
+      enabled: false,            // Activar/desactivar efecto de glow en el fondo
       intensity: 0.1 ,          // 0-1: Intensidad del efecto de glow (más sutil)
       speed: 0.03,              // Velocidad del LFO triangular (más bajo = más lento)
       color: '#fff',         // Color base del fondo (negro)
@@ -193,88 +194,139 @@ export default function SangreCanvas() {
   useEffect(() => {
     // Precargar todos los videos al iniciar
     const preloadAllVideos = async () => {
-      if (videoList.length === 0) return;
-      
-      console.log("Precargando todos los videos al inicio");
-      
-      // Configurar el video primario con el primer video
-      if (videoRef.current) {
-        // Esperar a que termine cualquier operación pendiente
-        videoRef.current.pause();
-        
-        // Usar un evento de carga para reproducir el video cuando esté listo
-        const handlePrimaryLoaded = async () => {
-          if (!videoRef.current) return;
-          
-          videoRef.current.removeEventListener('loadeddata', handlePrimaryLoaded);
-          try {
-            // Solo intentar reproducir cuando el video esté completamente cargado
-            if (videoRef.current && videoRef.current.readyState >= 3) {
-              await videoRef.current.play();
-              console.log("Video primario iniciado correctamente");
-            }
-          } catch (error) {
-            console.error("Error al reproducir video primario:", error);
-            // Intentar reproducir de nuevo con muted como atributo
-            if (videoRef.current) {
-              videoRef.current.setAttribute("muted", "");
-              try {
-                await videoRef.current.play();
-              } catch (e) {
-                console.error("Segundo intento fallido:", e);
-              }
-            }
-          }
-        };
-        
-        videoRef.current.addEventListener('loadeddata', handlePrimaryLoaded);
-        videoRef.current.muted = true;
-        videoRef.current.loop = true;
-        videoRef.current.playsInline = true;
-        videoRef.current.autoplay = false; // Desactivar autoplay para evitar competencia
-        videoRef.current.preload = "auto";
-        videoRef.current.src = videoList[0];
-        videoRef.current.load();
+      if (videoList.length === 0) {
+        console.warn("No hay videos en la lista para cargar");
+        return;
       }
       
-      // Si hay un segundo video, precargarlo en el elemento secundario
-      if (videoList.length > 1 && secondaryVideoRef.current) {
-        // Esperar a que termine cualquier operación pendiente
-        secondaryVideoRef.current.pause();
+      console.log("Precargando todos los videos al inicio:", videoList);
+      
+      try {
+        // Verificar que el primer video existe y es accesible
+        if (!videoList[0]) {
+          console.error("El primer video es undefined o null");
+          return;
+        }
         
-        // Usar un evento de carga para reproducir el video cuando esté listo
-        const handleSecondaryLoaded = async () => {
-          if (!secondaryVideoRef.current) return;
+        // Configurar el video primario con el primer video
+        if (videoRef.current) {
+          // Esperar a que termine cualquier operación pendiente
+          videoRef.current.pause();
           
-          secondaryVideoRef.current.removeEventListener('loadeddata', handleSecondaryLoaded);
-          try {
-            // Solo intentar reproducir cuando el video esté completamente cargado
-            if (secondaryVideoRef.current && secondaryVideoRef.current.readyState >= 3) {
-              await secondaryVideoRef.current.play();
-              console.log("Video secundario precargado correctamente");
-            }
-          } catch (error) {
-            console.error("Error al precargar video secundario:", error);
-            if (secondaryVideoRef.current) {
-              secondaryVideoRef.current.setAttribute("muted", "");
-              try {
-                await secondaryVideoRef.current.play();
-              } catch (e) {
-                console.error("Segundo intento fallido para video secundario:", e);
+          // Usar un evento de carga para reproducir el video cuando esté listo
+          const handlePrimaryLoaded = async () => {
+            if (!videoRef.current) return;
+            
+            videoRef.current.removeEventListener('loadeddata', handlePrimaryLoaded);
+            try {
+              // Solo intentar reproducir cuando el video esté completamente cargado
+              if (videoRef.current && videoRef.current.readyState >= 3) {
+                await videoRef.current.play();
+                console.log("Video primario iniciado correctamente");
+              }
+            } catch (error) {
+              console.error("Error al reproducir video primario:", error);
+              // Intentar reproducir de nuevo con muted como atributo
+              if (videoRef.current) {
+                videoRef.current.setAttribute("muted", "");
+                try {
+                  await videoRef.current.play();
+                } catch (e) {
+                  console.error("Segundo intento fallido:", e);
+                }
               }
             }
-          }
-        };
+          };
+          
+          // Manejador de errores específico para la carga inicial
+          const handlePrimaryError = () => {
+            videoRef.current?.removeEventListener('error', handlePrimaryError);
+            
+            const video = videoRef.current;
+            console.error("Error al cargar video primario:", {
+              src: video?.src || "No source",
+              error: video?.error ? {
+                code: video.error.code,
+                message: video.error.message
+              } : "No error object"
+            });
+          };
+          
+          videoRef.current.addEventListener('loadeddata', handlePrimaryLoaded);
+          videoRef.current.addEventListener('error', handlePrimaryError);
+          videoRef.current.muted = true;
+          videoRef.current.loop = true;
+          videoRef.current.playsInline = true;
+          videoRef.current.autoplay = false; // Desactivar autoplay para evitar competencia
+          videoRef.current.preload = "auto";
+          videoRef.current.src = videoList[0];
+          videoRef.current.load();
+        }
         
-        secondaryVideoRef.current.addEventListener('loadeddata', handleSecondaryLoaded);
-        secondaryVideoRef.current.muted = true;
-        secondaryVideoRef.current.loop = true;
-        secondaryVideoRef.current.playsInline = true;
-        secondaryVideoRef.current.autoplay = false; // Desactivar autoplay para evitar competencia
-        secondaryVideoRef.current.preload = "auto";
-        secondaryVideoRef.current.style.opacity = '0';
-        secondaryVideoRef.current.src = videoList[1];
-        secondaryVideoRef.current.load();
+        // Si hay un segundo video, precargarlo en el elemento secundario
+        if (videoList.length > 1 && secondaryVideoRef.current) {
+          // Verificar que el segundo video existe
+          if (!videoList[1]) {
+            console.error("El segundo video es undefined o null");
+            return;
+          }
+          
+          // Esperar a que termine cualquier operación pendiente
+          secondaryVideoRef.current.pause();
+          
+          // Usar un evento de carga para reproducir el video cuando esté listo
+          const handleSecondaryLoaded = async () => {
+            if (!secondaryVideoRef.current) return;
+            
+            secondaryVideoRef.current.removeEventListener('loadeddata', handleSecondaryLoaded);
+            try {
+              // Solo intentar reproducir cuando el video esté completamente cargado
+              if (secondaryVideoRef.current && secondaryVideoRef.current.readyState >= 3) {
+                await secondaryVideoRef.current.play();
+                console.log("Video secundario precargado correctamente");
+              }
+            } catch (error) {
+              console.error("Error al precargar video secundario:", error);
+              if (secondaryVideoRef.current) {
+                secondaryVideoRef.current.setAttribute("muted", "");
+                try {
+                  await secondaryVideoRef.current.play();
+                } catch (e) {
+                  console.error("Segundo intento fallido para video secundario:", e);
+                }
+              }
+            }
+          };
+          
+          // Manejador de errores específico para la carga inicial
+          const handleSecondaryError = () => {
+            secondaryVideoRef.current?.removeEventListener('error', handleSecondaryError);
+            
+            const video = secondaryVideoRef.current;
+            console.error("Error al cargar video secundario:", {
+              src: video?.src || "No source",
+              error: video?.error ? {
+                code: video.error.code,
+                message: video.error.message
+              } : "No error object"
+            });
+          };
+          
+          secondaryVideoRef.current.addEventListener('loadeddata', handleSecondaryLoaded);
+          secondaryVideoRef.current.addEventListener('error', handleSecondaryError);
+          secondaryVideoRef.current.muted = true;
+          secondaryVideoRef.current.loop = true;
+          secondaryVideoRef.current.playsInline = true;
+          secondaryVideoRef.current.autoplay = false; // Desactivar autoplay para evitar competencia
+          secondaryVideoRef.current.preload = "auto";
+          secondaryVideoRef.current.style.opacity = '0';
+          secondaryVideoRef.current.src = videoList[1];
+          secondaryVideoRef.current.load();
+        } else {
+          console.warn("No hay segundo video para cargar o el elemento de video secundario no existe");
+        }
+      } catch (error) {
+        console.error("Error grave al precargar videos:", error);
       }
       
       setVideoLoaded(true);
@@ -859,7 +911,30 @@ export default function SangreCanvas() {
     
     // Preparar videos precargados
     const preloadVideos = () => {
-      videoList.forEach(videoUrl => {
+      console.log("Intentando precargar videos:", videoList);
+      
+      // Verificar que los videos existan
+      videoList.forEach((videoUrl, index) => {
+        // Crear un elemento temporal para probar si el video es accesible
+        const testVideo = document.createElement('video');
+        testVideo.muted = true;
+        testVideo.style.display = 'none';
+        testVideo.onloadeddata = () => {
+          console.log(`✅ Video ${index} (${videoUrl}) cargado correctamente`);
+          document.body.removeChild(testVideo);
+        };
+        testVideo.onerror = (e) => {
+          console.error(`❌ Error al precargar video ${index} (${videoUrl}):`, e);
+          document.body.removeChild(testVideo);
+        };
+        
+        // Agregar al DOM temporalmente
+        document.body.appendChild(testVideo);
+        
+        // Intentar cargar
+        testVideo.src = videoUrl;
+        
+        // Crear enlaces preload
         const link = document.createElement('link');
         link.rel = 'preload';
         link.href = videoUrl;
@@ -1013,15 +1088,37 @@ export default function SangreCanvas() {
         onError={(e) => {
           // More detailed error logging
           const video = e.currentTarget;
+          
+          let errorInfo: {
+            message: string;
+            code?: number;
+            MEDIA_ERR_ABORTED?: boolean;
+            MEDIA_ERR_NETWORK?: boolean;
+            MEDIA_ERR_DECODE?: boolean;
+            MEDIA_ERR_SRC_NOT_SUPPORTED?: boolean;
+          } = {
+            message: "Error desconocido"
+          };
+          
+          if (video.error) {
+            errorInfo = {
+              code: video.error.code,
+              message: video.error.message,
+              MEDIA_ERR_ABORTED: (video.error.code === 1),
+              MEDIA_ERR_NETWORK: (video.error.code === 2),
+              MEDIA_ERR_DECODE: (video.error.code === 3),
+              MEDIA_ERR_SRC_NOT_SUPPORTED: (video.error.code === 4)
+            };
+          }
+          
           console.error("Error en video secundario:", {
             event: e,
-            src: video.src,
+            src: video.src || "No source",
+            videoList,
+            currentVideoIndex,
             networkState: video.networkState,
             readyState: video.readyState,
-            error: video.error ? {
-              code: video.error.code,
-              message: video.error.message
-            } : null
+            error: errorInfo
           });
           
           // No intentar recuperación automática aquí para evitar ciclos de carga
