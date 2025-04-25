@@ -194,46 +194,75 @@ export default function SangreCanvas() {
     
     // Marcar que estamos cambiando video
     changingVideoRef.current = true;
-    setVideoLoaded(false);
     
     try {
-      // Detener cualquier reproducción anterior
-      videoRef.current.pause();
+      // Crear un nuevo elemento video temporal para precargar
+      const tempVideo = document.createElement('video');
+      tempVideo.muted = true;
+      tempVideo.src = videoList[currentVideoIndex];
+      tempVideo.loop = true;
       
-      // Esperar un momento para asegurar que se detuvo
-      await new Promise(resolve => setTimeout(resolve, 50));
+      // Precargar el video
+      console.log("Precargando nuevo video:", videoList[currentVideoIndex]);
       
-      console.log("Cargando video:", videoList[currentVideoIndex]);
-      animSettings.videoPath = videoList[currentVideoIndex];
-      videoRef.current.src = animSettings.videoPath;
-      videoRef.current.load();
+      // Esperar a que se cargue el video
+      await new Promise((resolve, reject) => {
+        tempVideo.onloadeddata = resolve;
+        tempVideo.onerror = reject;
+        tempVideo.load();
+      });
       
-      // Esperar a que el video esté listo antes de reproducir
-      videoRef.current.onloadeddata = async () => {
-        if (!videoRef.current) return;
+      // Mantener el video antiguo visible hasta que el nuevo esté listo
+      if (videoRef.current) {
+        // Establecer la opacidad del video actual en 0 gradualmente
+        const fadeOutDuration = 500; // ms
+        const startTime = performance.now();
         
-        console.log("Video cargado, reproduciendo...");
-        try {
-          await videoRef.current.play();
-          console.log("Video reproduciéndose correctamente");
-          setVideoLoaded(true);
-        } catch (error) {
-          console.error("Error al reproducir:", error);
-        } finally {
-          // Ya no estamos cambiando video
-          changingVideoRef.current = false;
-        }
-      };
+        const fadeOut = (currentTime: number) => {
+          const elapsed = currentTime - startTime;
+          const opacity = Math.max(0, 1 - elapsed / fadeOutDuration);
+          
+          if (videoRef.current) {
+            videoRef.current.style.opacity = String(opacity);
+          }
+          
+          if (elapsed < fadeOutDuration) {
+            requestAnimationFrame(fadeOut);
+          } else {
+            // Ya se completó el fade-out, actualizar la fuente
+            if (videoRef.current) {
+              // Actualizar la fuente y reproducir
+              videoRef.current.src = videoList[currentVideoIndex];
+              videoRef.current.load();
+              videoRef.current.play().catch(console.error);
+              
+              // Fade-in
+              videoRef.current.style.opacity = '0';
+              requestAnimationFrame(() => {
+                if (videoRef.current) {
+                  videoRef.current.style.opacity = '1';
+                  videoRef.current.style.transition = 'opacity 500ms ease-in-out';
+                }
+              });
+            }
+          }
+        };
+        
+        // Iniciar el fade-out
+        requestAnimationFrame(fadeOut);
+      }
       
-      // Manejar errores de carga
-      videoRef.current.onerror = () => {
-        console.error("Error al cargar el video");
-        changingVideoRef.current = false;
-        setVideoLoaded(false);
-      };
+      console.log("Video precargado correctamente");
+      animSettings.videoPath = videoList[currentVideoIndex];
+      setVideoLoaded(true);
     } catch (error) {
-      console.error("Error en la secuencia de carga:", error);
-      changingVideoRef.current = false;
+      console.error("Error al precargar video:", error);
+      setVideoLoaded(false);
+    } finally {
+      // Ya no estamos cambiando video
+      setTimeout(() => {
+        changingVideoRef.current = false;
+      }, 1000); // Dar tiempo para que la transición termine
     }
   };
 
@@ -241,6 +270,15 @@ export default function SangreCanvas() {
   useEffect(() => {
     // No cambiar automáticamente en modo de renderizado
     if (animSettings.renderMode) return;
+    
+    // Verificar si es un despliegue real (no localhost)
+    const isProduction = typeof window !== 'undefined' && !window.location.hostname.includes('localhost');
+    
+    // En producción, usar solo el modo video para mayor impacto visual
+    if (isProduction && displayMode !== 'video') {
+      setDisplayMode('video');
+      return;
+    }
     
     const intervalId = setInterval(() => {
       // No cambiar si estamos en proceso de cambio de video
@@ -254,7 +292,7 @@ export default function SangreCanvas() {
           case 'video': 
             // Al cambiar de video a light, avanzar al siguiente video
             setCurrentVideoIndex(prev => (prev + 1) % videoList.length);
-            return 'light';
+            return isProduction ? 'video' : 'light'; // En producción, siempre volver a video
           default: return 'light';
         }
       });
@@ -683,7 +721,8 @@ export default function SangreCanvas() {
           height: '100%',
           objectFit: 'contain',
           zIndex: -1,
-          display: 'none' // Hidden, only used as source for canvas
+          display: 'none', // Hidden, only used as source for canvas
+          transition: 'opacity 500ms ease-in-out'
         }}
         muted
         loop

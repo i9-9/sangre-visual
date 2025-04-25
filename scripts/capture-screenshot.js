@@ -11,7 +11,7 @@ const __dirname = path.dirname(__filename);
 const OUTPUT_DIR = path.join(__dirname, '../output');
 const SCREENSHOT_PATH = path.join(OUTPUT_DIR, 'sangre_screenshot.png');
 const VIEWPORT = { width: 1920, height: 1080 }; // Resolución Full HD para mejor calidad
-const URL = 'http://localhost:3000?render=true&mode=dark';
+const URL = 'http://localhost:3000?render=true&mode=video&videoIndex=0';
 
 // Asegurar que el directorio exista
 if (!fs.existsSync(OUTPUT_DIR)) {
@@ -55,16 +55,16 @@ async function captureScreenshot() {
     
     // Esperar un poco más para que la animación se estabilice
     // Reemplazar waitForTimeout con una promesa setTimeout
-    console.log('Esperando para que la animación se estabilice (5 segundos)...');
-    await new Promise(resolve => setTimeout(resolve, 5000));
+    console.log('Esperando para que la animación se estabilice (10 segundos)...');
+    await new Promise(resolve => setTimeout(resolve, 10000));
     
     // Capturar screenshot
     console.log(`Guardando screenshot en ${SCREENSHOT_PATH}...`);
     await page.screenshot({ 
       path: SCREENSHOT_PATH,
       type: 'png',
-      fullPage: true,
-      quality: 100 // Máxima calidad
+      fullPage: true
+      // Quitar quality que no es compatible con PNG
     });
     
     await browser.close();
