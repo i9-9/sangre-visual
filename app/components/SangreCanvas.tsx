@@ -70,8 +70,50 @@ export default function SangreCanvas() {
   const [currentPattern, setCurrentPattern] = useState(0);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [windowSize, setWindowSize] = useState({ width: 0, height: 0 });
-  const text = 'sgr9';
-  const LETTER_SPACING = 55;
+  const text = 'SANGRE';
+  
+  // Ajustes de animación
+  const [animSettings] = useState({
+    individualModules: true,    // Animar módulos individualmente vs. por bloques
+    moduleVariance: 0.1,        // 0-1: Qué tanto varía la animación entre módulos cercanos
+    animationSpeed: 0.2,       // Multiplicador de velocidad de animación (más bajo = más lento)
+    patternDuration: 30,        // Segundos antes de cambiar de patrón
+    randomness: 0.2,            // 0-1: Nivel de aleatoriedad en animaciones
+    waveIntensity: 0.6,         // 0-1: Intensidad de efecto ondulatorio
+    pulseRange: [0.5, 1.0],     // Rango de opacidad para pulsos
+    // Nuevos parámetros
+    darkMode: false,             // true = modo oscuro, false = modo claro
+    backgroundGlow: {
+      enabled: true,            // Activar/desactivar efecto de glow en el fondo
+      intensity: 1,          // 0-1: Intensidad del efecto de glow (más sutil)
+      speed: 0.03,              // Velocidad del LFO triangular (más bajo = más lento)
+      color: '#fff',         // Color base del fondo (negro)
+      glowColor: '#f0f0ff',     // Color del glow (ligeramente azulado)
+      centerX: 0.5,             // Posición X del centro del glow (0-1)
+      centerY: 0.5,             // Posición Y del centro del glow (0-1)
+      pulseAmount: 0.2          // Cantidad de movimiento en el radio del glow
+    },
+    textSpacing: 2.0,           // Multiplicador de espaciado entre letras
+    textOpacity: 1.0,           // Opacidad del texto
+    textPosition: {
+      x: 645,               // Posición X del texto (centrado por defecto)
+      y: 450,                   // Posición Y del texto
+      alignment: 'center',      // Alineación del texto: 'left', 'center', 'right'
+      fontSize: 100,            // Tamaño de fuente
+      fontFamily: '"Architype", sans-serif' // Familia de fuente
+    },
+    rectOpacityMultiplier: 1.0, // Multiplicador general de opacidad para rectángulos
+    useGridEffect: false,       // Efecto visual de grid sobre los módulos
+    gridOpacity: 5,          // Opacidad del grid
+    gridSpacing: 20,            // Espaciado del grid en píxeles
+    colorShift: {
+      enabled: false,           // Aplicar desplazamiento de color a los rectángulos
+      hue: 0,                   // Desplazamiento de tono (0-360)
+      saturation: 0,            // Ajuste de saturación (-100 a 100)
+      lightness: 0              // Ajuste de luminosidad (-100 a 100)
+    }
+  });
+  
   const svgViewBox = { width: 1026.91, height: 986.75 };
 
   // Update window size
@@ -111,6 +153,81 @@ export default function SangreCanvas() {
       });
   }, []);
 
+  // Calculate opacity for a given element at current time
+  const calculateOpacity = (index: number, time: number) => {
+    const pattern = patterns[currentPattern];
+    const cycleTime = pattern.duration * 1000 / animSettings.animationSpeed;
+    
+    // Aplicar variación a los retrasos según ajustes
+    let delayMultiplier = 1;
+    
+    if (animSettings.individualModules) {
+      // Para generar ondas visuales, usamos coordenadas virtuales basadas en el índice
+      const row = Math.floor(index / 20); // Asumimos aproximadamente 20 elementos por fila
+      const col = index % 20;
+      
+      // Efecto de ondas radiales que se expanden desde el centro
+      const distance = Math.sqrt(Math.pow(row - 10, 2) + Math.pow(col - 10, 2));
+      delayMultiplier = distance * 0.1;
+      
+      // Aplica la varianza del módulo configurada
+      delayMultiplier = delayMultiplier * animSettings.moduleVariance + (1 - animSettings.moduleVariance);
+      
+      // Añadir efecto de onda si está activado
+      if (animSettings.waveIntensity > 0) {
+        const waveEffect = Math.sin(time * 0.0005 + distance * 0.3) * animSettings.waveIntensity;
+        delayMultiplier += waveEffect * 0.2;
+      }
+      
+      // Añadir aleatoriedad
+      if (animSettings.randomness > 0) {
+        const randomOffset = (Math.sin(index * 12.9898 + time * 0.0005) * 43758.5453) % 1;
+        delayMultiplier += (randomOffset - 0.5) * animSettings.randomness * 0.3;
+      }
+    }
+    
+    const delayTime = index * pattern.delay * 1000 * delayMultiplier;
+    
+    // Usar el timestamp para calcular el tiempo transcurrido
+    const elapsedTime = (time + delayTime) % cycleTime;
+    const progress = elapsedTime / cycleTime;
+    
+    const opacities = pattern.animation.opacity;
+    const numSteps = opacities.length - 1;
+    const stepSize = 1 / numSteps;
+    
+    let i = Math.floor(progress / stepSize);
+    if (i >= numSteps) i = numSteps - 1;
+    
+    const stepProgress = (progress - (i * stepSize)) / stepSize;
+    let start = opacities[i];
+    let end = opacities[i + 1];
+    
+    // Ajustar el rango de opacidad según la configuración
+    if (pattern.name.includes('pulse')) {
+      const [min, max] = animSettings.pulseRange;
+      start = min + (max - min) * start;
+      end = min + (max - min) * end;
+    }
+    
+    // Aplicar el multiplicador general de opacidad
+    return (start + (end - start) * stepProgress) * animSettings.rectOpacityMultiplier;
+  };
+
+  // Function to calculate background LFO triangular wave
+  const calculateBackgroundGlow = (time: number) => {
+    if (!animSettings.backgroundGlow.enabled) return 0;
+    
+    // Triangular LFO wave: intensidad varía de 0 a 1 y luego baja de 1 a 0
+    const period = 1000 / animSettings.backgroundGlow.speed; // ms
+    const t = (time % period) / period;
+    
+    // Triangular wave formula (0->1->0)
+    return t < 0.5 
+      ? 2 * t * animSettings.backgroundGlow.intensity 
+      : (2 - 2 * t) * animSettings.backgroundGlow.intensity;
+  };
+
   // Change pattern periodically
   useEffect(() => {
     const interval = setInterval(() => {
@@ -133,59 +250,10 @@ export default function SangreCanvas() {
           });
         }
       }
-    }, 15000);
+    }, animSettings.patternDuration * 1000);
 
     return () => clearInterval(interval);
-  }, []);
-
-  // Draw a rounded rectangle on canvas
-  const drawRoundedRect = (
-    ctx: CanvasRenderingContext2D, 
-    x: number, 
-    y: number, 
-    width: number, 
-    height: number, 
-    radius: number,
-    opacity: number
-  ) => {
-    ctx.globalAlpha = opacity;
-    ctx.beginPath();
-    ctx.moveTo(x + radius, y);
-    ctx.lineTo(x + width - radius, y);
-    ctx.quadraticCurveTo(x + width, y, x + width, y + radius);
-    ctx.lineTo(x + width, y + height - radius);
-    ctx.quadraticCurveTo(x + width, y + height, x + width - radius, y + height);
-    ctx.lineTo(x + radius, y + height);
-    ctx.quadraticCurveTo(x, y + height, x, y + height - radius);
-    ctx.lineTo(x, y + radius);
-    ctx.quadraticCurveTo(x, y, x + radius, y);
-    ctx.closePath();
-    ctx.fill();
-  };
-
-  // Calculate opacity for a given element at current time
-  const calculateOpacity = (index: number, time: number) => {
-    const pattern = patterns[currentPattern];
-    const cycleTime = pattern.duration * 1000;
-    const delayTime = index * pattern.delay * 1000;
-    
-    // Use the actual timestamp instead of relying on startTimeRef
-    const elapsedTime = (time + delayTime) % cycleTime;
-    const progress = elapsedTime / cycleTime;
-    
-    const opacities = pattern.animation.opacity;
-    const numSteps = opacities.length - 1;
-    const stepSize = 1 / numSteps;
-    
-    let i = Math.floor(progress / stepSize);
-    if (i >= numSteps) i = numSteps - 1;
-    
-    const stepProgress = (progress - (i * stepSize)) / stepSize;
-    const start = opacities[i];
-    const end = opacities[i + 1];
-    
-    return start + (end - start) * stepProgress;
-  };
+  }, [animSettings.patternDuration]);
 
   // Main animation loop
   useEffect(() => {
@@ -207,12 +275,105 @@ export default function SangreCanvas() {
     // Scale for high-DPI displays
     ctx.scale(dpr, dpr);
     
+    // Draw a rounded rectangle on canvas
+    const drawRoundedRect = (
+      ctx: CanvasRenderingContext2D, 
+      x: number, 
+      y: number, 
+      width: number, 
+      height: number, 
+      radius: number,
+      opacity: number
+    ) => {
+      ctx.globalAlpha = opacity;
+      ctx.beginPath();
+      ctx.moveTo(x + radius, y);
+      ctx.lineTo(x + width - radius, y);
+      ctx.quadraticCurveTo(x + width, y, x + width, y + radius);
+      ctx.lineTo(x + width, y + height - radius);
+      ctx.quadraticCurveTo(x + width, y + height, x + width - radius, y + height);
+      ctx.lineTo(x + radius, y + height);
+      ctx.quadraticCurveTo(x, y + height, x, y + height - radius);
+      ctx.lineTo(x, y + radius);
+      ctx.quadraticCurveTo(x, y, x + radius, y);
+      ctx.closePath();
+      ctx.fill();
+    };
+    
     const animate = (time: number) => {
       if (!ctx) return;
       
-      // Clear canvas
-      ctx.fillStyle = 'white';
+      // Calculate background glow effect
+      const glowIntensity = calculateBackgroundGlow(time);
+      
+      // Limpiar el canvas con el color base
+      ctx.fillStyle = animSettings.darkMode ? '#000000' : '#ffffff';
       ctx.fillRect(0, 0, windowSize.width, windowSize.height);
+      
+      // Crear un gradiente radial para el efecto de glow
+      if (animSettings.backgroundGlow.enabled && glowIntensity > 0) {
+        const centerX = windowSize.width * animSettings.backgroundGlow.centerX;
+        const centerY = windowSize.height * animSettings.backgroundGlow.centerY;
+        
+        // El radio del gradiente depende del tamaño de la ventana y la intensidad
+        const maxRadius = Math.max(windowSize.width, windowSize.height);
+        
+        // Añadir pulsación suave al radio interno para crear efecto de respiración
+        const pulseOffset = Math.sin(time * 0.0005) * animSettings.backgroundGlow.pulseAmount;
+        const innerRadius = maxRadius * (0.05 + pulseOffset * 0.05);
+        const outerRadius = maxRadius * (0.6 + glowIntensity * 0.4);
+        
+        const gradient = ctx.createRadialGradient(
+          centerX, centerY, innerRadius,
+          centerX, centerY, outerRadius
+        );
+        
+        // Obtener componentes RGB del color de glow configurado
+        const glowColor = animSettings.backgroundGlow.glowColor;
+        const glowR = parseInt(glowColor.slice(1, 3), 16);
+        const glowG = parseInt(glowColor.slice(3, 5), 16);
+        const glowB = parseInt(glowColor.slice(5, 7), 16);
+        
+        // Crear gradiente con múltiples paradas para un efecto más suave
+        gradient.addColorStop(0, `rgba(${glowR}, ${glowG}, ${glowB}, ${glowIntensity * 0.6})`);
+        gradient.addColorStop(0.3, `rgba(${glowR}, ${glowG}, ${glowB}, ${glowIntensity * 0.3})`);
+        gradient.addColorStop(0.7, `rgba(${glowR}, ${glowG}, ${glowB}, ${glowIntensity * 0.1})`);
+        gradient.addColorStop(1, `rgba(${glowR}, ${glowG}, ${glowB}, 0)`);
+        
+        // Aplicar el gradiente con modo de fusión que intensifica los colores
+        ctx.globalCompositeOperation = 'screen';
+        ctx.fillStyle = gradient;
+        ctx.fillRect(0, 0, windowSize.width, windowSize.height);
+        
+        // Restaurar modo de composición normal
+        ctx.globalCompositeOperation = 'source-over';
+      }
+      
+      // Dibujar grid si está activado
+      if (animSettings.useGridEffect) {
+        ctx.save();
+        ctx.strokeStyle = '#2a2a2a';
+        ctx.globalAlpha = animSettings.gridOpacity;
+        ctx.lineWidth = 0.5;
+        
+        const gridSize = animSettings.gridSpacing;
+        // Dibujar líneas horizontales
+        for (let y = gridSize; y < windowSize.height; y += gridSize) {
+          ctx.beginPath();
+          ctx.moveTo(0, y);
+          ctx.lineTo(windowSize.width, y);
+          ctx.stroke();
+        }
+        
+        // Dibujar líneas verticales
+        for (let x = gridSize; x < windowSize.width; x += gridSize) {
+          ctx.beginPath();
+          ctx.moveTo(x, 0);
+          ctx.lineTo(x, windowSize.height);
+          ctx.stroke();
+        }
+        ctx.restore();
+      }
       
       // Calculate scale to fit SVG viewBox
       const scale = Math.min(
@@ -229,7 +390,16 @@ export default function SangreCanvas() {
       ctx.scale(scale, scale);
       
       // Draw rectangles
-      ctx.fillStyle = '#2a2a2a';
+      if (animSettings.colorShift.enabled) {
+        // HSL color shift basado en configuración
+        const hue = animSettings.colorShift.hue;
+        const saturation = animSettings.colorShift.saturation;
+        const lightness = animSettings.colorShift.lightness;
+        ctx.fillStyle = `hsl(${hue}, ${50 + saturation}%, ${20 + lightness}%)`;
+      } else {
+        ctx.fillStyle = animSettings.darkMode ? '#2a2a2a' : '#000000';
+      }
+      
       rectangles.forEach((rect, index) => {
         const opacity = calculateOpacity(index, time);
         drawRoundedRect(
@@ -243,14 +413,15 @@ export default function SangreCanvas() {
         );
       });
       
-      // Draw text
-      ctx.fillStyle = '#2a2a2a';
-      ctx.font = '128px "Architype", Arial, sans-serif';
-      ctx.globalAlpha = 1;
+      // Dibujar texto estático
+      ctx.fillStyle = animSettings.darkMode ? '#ffffff' : '#000000';
+      ctx.font = `${animSettings.textPosition.fontSize}px ${animSettings.textPosition.fontFamily}`;
+      ctx.textAlign = animSettings.textPosition.alignment as CanvasTextAlign;
+      ctx.textBaseline = 'middle';
+      ctx.globalAlpha = animSettings.textOpacity;
       
-      text.split('').forEach((char, index) => {
-        ctx.fillText(char, 560 + (index * LETTER_SPACING), 445);
-      });
+      // Dibujar el texto en posición configurable
+      ctx.fillText(text, animSettings.textPosition.x, animSettings.textPosition.y);
       
       ctx.restore();
       
