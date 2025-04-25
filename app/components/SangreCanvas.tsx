@@ -76,10 +76,11 @@ export default function SangreCanvas() {
   const [animSettings] = useState({
     individualModules: true,    // Animar módulos individualmente vs. por bloques
     moduleVariance: 0.1,        // 0-1: Qué tanto varía la animación entre módulos cercanos
-    animationSpeed: 0.2,       // Multiplicador de velocidad de animación (más bajo = más lento)
+    animationSpeed: 0.6,       // Multiplicador de velocidad de animación (más bajo = más lento)
     patternDuration: 30,        // Segundos antes de cambiar de patrón
-    randomness: 0.2,            // 0-1: Nivel de aleatoriedad en animaciones
-    waveIntensity: 0.6,         // 0-1: Intensidad de efecto ondulatorio
+    randomness: 0.05,           // 0-1: Nivel de aleatoriedad en animaciones
+    waveIntensity: 0.8,         // 0-1: Intensidad de efecto ondulatorio
+    waveSpeed: 0.0001,          // Velocidad de propagación de ondas
     pulseRange: [0.5, 1.0],     // Rango de opacidad para pulsos
     // Nuevos parámetros
     darkMode: false,             // true = modo oscuro, false = modo claro
@@ -163,26 +164,34 @@ export default function SangreCanvas() {
     
     if (animSettings.individualModules) {
       // Para generar ondas visuales, usamos coordenadas virtuales basadas en el índice
-      const row = Math.floor(index / 20); // Asumimos aproximadamente 20 elementos por fila
-      const col = index % 20;
+      const row = Math.floor(index / 30); // Asumimos aproximadamente 30 elementos por fila
+      const col = index % 30;
       
-      // Efecto de ondas radiales que se expanden desde el centro
-      const distance = Math.sqrt(Math.pow(row - 10, 2) + Math.pow(col - 10, 2));
-      delayMultiplier = distance * 0.1;
+      // Creamos un centro móvil para las ondas
+      const centerX = 15 + Math.sin(time * 0.00005) * 10;
+      const centerY = 10 + Math.cos(time * 0.00004) * 5;
       
-      // Aplica la varianza del módulo configurada
+      // Efecto de ondas radiales que se expanden desde el centro móvil
+      const distance = Math.sqrt(Math.pow(row - centerY, 2) + Math.pow(col - centerX, 2));
+      
+      // La distancia influye directamente en el retraso, generando un patrón ondulatorio
+      // visible que se propaga hacia afuera desde el centro
+      delayMultiplier = Math.sin(distance * 0.3 - time * animSettings.waveSpeed) * 0.5 + 0.5;
+      
+      // Aplica la varianza del módulo configurada (más sutil)
       delayMultiplier = delayMultiplier * animSettings.moduleVariance + (1 - animSettings.moduleVariance);
       
-      // Añadir efecto de onda si está activado
+      // Añadir efecto de onda adicional si está activado (para doble patrón)
       if (animSettings.waveIntensity > 0) {
-        const waveEffect = Math.sin(time * 0.0005 + distance * 0.3) * animSettings.waveIntensity;
+        // Creamos ondas concéntricas que se mueven lentamente 
+        const waveEffect = Math.sin(time * 0.00008 + distance * 0.2) * animSettings.waveIntensity;
         delayMultiplier += waveEffect * 0.2;
       }
       
-      // Añadir aleatoriedad
+      // Añadir aleatoriedad mínima para suavizar
       if (animSettings.randomness > 0) {
-        const randomOffset = (Math.sin(index * 12.9898 + time * 0.0005) * 43758.5453) % 1;
-        delayMultiplier += (randomOffset - 0.5) * animSettings.randomness * 0.3;
+        const randomOffset = (Math.sin(index * 12.9898 + time * 0.0001) * 43758.5453) % 1;
+        delayMultiplier += (randomOffset - 0.5) * animSettings.randomness * 0.1;
       }
     }
     
