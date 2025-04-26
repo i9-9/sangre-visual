@@ -67,7 +67,7 @@ const patterns: Pattern[] = [
 
 const videoList = [
   '/video/lava.mov',
-  '/video/lava2.mov',
+  '/video/lava4.mov',
   '/video/lava3.mov',
 ];
 
@@ -195,61 +195,74 @@ export default function SangreCanvas() {
     // Precargar todos los videos al iniciar
     const preloadAllVideos = async () => {
       if (videoList.length === 0) {
-        console.warn("No hay videos en la lista para cargar");
+        console.warn("No videos in the list to load");
         return;
       }
       
-      console.log("Precargando todos los videos al inicio:", videoList);
+      console.log("Preloading all videos on startup:", videoList);
       
       try {
-        // Verificar que el primer video existe y es accesible
+        // Check that the first video exists and is accessible
         if (!videoList[0]) {
-          console.error("El primer video es undefined o null");
+          console.error("First video is undefined or null");
           return;
         }
         
-        // Configurar el video primario con el primer video
+        // Stop any current loading
+        if (videoRef.current) videoRef.current.pause();
+        if (secondaryVideoRef.current) secondaryVideoRef.current.pause();
+        
+        // Load first video after a small pause
+        await new Promise(resolve => setTimeout(resolve, 100));
+        
+        // Set up the primary video with the first video
         if (videoRef.current) {
-          // Esperar a que termine cualquier operación pendiente
-          videoRef.current.pause();
-          
-          // Usar un evento de carga para reproducir el video cuando esté listo
           const handlePrimaryLoaded = async () => {
             if (!videoRef.current) return;
             
             videoRef.current.removeEventListener('loadeddata', handlePrimaryLoaded);
             try {
-              // Solo intentar reproducir cuando el video esté completamente cargado
+              // Only try to play when video is fully loaded
               if (videoRef.current && videoRef.current.readyState >= 3) {
+                // Add a small delay to prevent play interruption
+                await new Promise(resolve => setTimeout(resolve, 50));
                 await videoRef.current.play();
-                console.log("Video primario iniciado correctamente");
+                console.log("Primary video started successfully");
               }
             } catch (error) {
-              console.error("Error al reproducir video primario:", error);
-              // Intentar reproducir de nuevo con muted como atributo
+              console.error("Error playing primary video:", error);
               if (videoRef.current) {
                 videoRef.current.setAttribute("muted", "");
                 try {
+                  // Add a delay before retry
+                  await new Promise(resolve => setTimeout(resolve, 100));
                   await videoRef.current.play();
                 } catch (e) {
-                  console.error("Segundo intento fallido:", e);
+                  console.error("Second attempt failed:", e);
                 }
               }
             }
           };
           
-          // Manejador de errores específico para la carga inicial
           const handlePrimaryError = () => {
             videoRef.current?.removeEventListener('error', handlePrimaryError);
             
             const video = videoRef.current;
-            console.error("Error al cargar video primario:", {
+            console.error("Error loading primary video:", {
               src: video?.src || "No source",
               error: video?.error ? {
                 code: video.error.code,
                 message: video.error.message
               } : "No error object"
             });
+            
+            // Try with different format if it fails
+            if (videoRef.current && videoRef.current.src.endsWith('.mov')) {
+              console.log("Trying MP4 format instead of MOV");
+              const mp4Src = videoRef.current.src.replace('.mov', '.mp4');
+              videoRef.current.src = mp4Src;
+              videoRef.current.load();
+            }
           };
           
           videoRef.current.addEventListener('loadeddata', handlePrimaryLoaded);
@@ -257,59 +270,70 @@ export default function SangreCanvas() {
           videoRef.current.muted = true;
           videoRef.current.loop = true;
           videoRef.current.playsInline = true;
-          videoRef.current.autoplay = false; // Desactivar autoplay para evitar competencia
+          videoRef.current.autoplay = false;
           videoRef.current.preload = "auto";
           videoRef.current.src = videoList[0];
           videoRef.current.load();
+          
+          // Wait a while before loading the second video
+          await new Promise(resolve => setTimeout(resolve, 1000));
         }
         
-        // Si hay un segundo video, precargarlo en el elemento secundario
-        if (videoList.length > 1 && secondaryVideoRef.current) {
-          // Verificar que el segundo video existe
+        // Only try to load the second video if the first one loaded correctly
+        if (videoList.length > 1 && secondaryVideoRef.current && videoRef.current && videoRef.current.readyState > 0) {
+          console.log("Loading second video after ensuring the first is ready");
+          
           if (!videoList[1]) {
-            console.error("El segundo video es undefined o null");
+            console.error("Second video is undefined or null");
             return;
           }
           
-          // Esperar a que termine cualquier operación pendiente
-          secondaryVideoRef.current.pause();
-          
-          // Usar un evento de carga para reproducir el video cuando esté listo
+          // Use a load event to play the video when ready
           const handleSecondaryLoaded = async () => {
             if (!secondaryVideoRef.current) return;
             
             secondaryVideoRef.current.removeEventListener('loadeddata', handleSecondaryLoaded);
             try {
-              // Solo intentar reproducir cuando el video esté completamente cargado
               if (secondaryVideoRef.current && secondaryVideoRef.current.readyState >= 3) {
+                // Add a small delay to prevent play interruption
+                await new Promise(resolve => setTimeout(resolve, 50));
                 await secondaryVideoRef.current.play();
-                console.log("Video secundario precargado correctamente");
+                console.log("Secondary video preloaded successfully");
               }
             } catch (error) {
-              console.error("Error al precargar video secundario:", error);
+              console.error("Error preloading secondary video:", error);
               if (secondaryVideoRef.current) {
                 secondaryVideoRef.current.setAttribute("muted", "");
                 try {
+                  // Add a delay before retry
+                  await new Promise(resolve => setTimeout(resolve, 100));
                   await secondaryVideoRef.current.play();
                 } catch (e) {
-                  console.error("Segundo intento fallido para video secundario:", e);
+                  console.error("Second attempt failed for secondary video:", e);
                 }
               }
             }
           };
           
-          // Manejador de errores específico para la carga inicial
           const handleSecondaryError = () => {
             secondaryVideoRef.current?.removeEventListener('error', handleSecondaryError);
             
             const video = secondaryVideoRef.current;
-            console.error("Error al cargar video secundario:", {
+            console.error("Error loading secondary video:", {
               src: video?.src || "No source",
               error: video?.error ? {
                 code: video.error.code,
                 message: video.error.message
               } : "No error object"
             });
+            
+            // Try with different format if it fails
+            if (secondaryVideoRef.current && secondaryVideoRef.current.src.endsWith('.mov')) {
+              console.log("Trying MP4 format instead of MOV for secondary video");
+              const mp4Src = secondaryVideoRef.current.src.replace('.mov', '.mp4');
+              secondaryVideoRef.current.src = mp4Src;
+              secondaryVideoRef.current.load();
+            }
           };
           
           secondaryVideoRef.current.addEventListener('loadeddata', handleSecondaryLoaded);
@@ -317,19 +341,23 @@ export default function SangreCanvas() {
           secondaryVideoRef.current.muted = true;
           secondaryVideoRef.current.loop = true;
           secondaryVideoRef.current.playsInline = true;
-          secondaryVideoRef.current.autoplay = false; // Desactivar autoplay para evitar competencia
+          secondaryVideoRef.current.autoplay = false;
           secondaryVideoRef.current.preload = "auto";
           secondaryVideoRef.current.style.opacity = '0';
           secondaryVideoRef.current.src = videoList[1];
           secondaryVideoRef.current.load();
         } else {
-          console.warn("No hay segundo video para cargar o el elemento de video secundario no existe");
+          console.warn("Cannot load secondary video because primary is not ready yet");
         }
+        
+        // Mark as loaded after a time to allow operations to complete
+        setTimeout(() => {
+          setVideoLoaded(true);
+        }, 2000);
+        
       } catch (error) {
-        console.error("Error grave al precargar videos:", error);
+        console.error("Critical error preloading videos:", error);
       }
-      
-      setVideoLoaded(true);
     };
 
     preloadAllVideos();
@@ -339,95 +367,102 @@ export default function SangreCanvas() {
   const loadVideoSafely = async () => {
     if (!videoRef.current || !secondaryVideoRef.current) return;
     
-    // Si es la primera carga y todavía no se ha cargado ningún video
+    // If is the first load and no video has been loaded yet
     if (!videoLoaded && currentVideoIndex === 0 && videoRef.current.readyState < 2) {
-      console.log("Inicializando videos por primera vez");
-      // No intentamos cargar aquí, ya lo hace el useEffect de preloadAllVideos
+      console.log("Initializing videos for the first time");
+      // Don't attempt to load here, the preloadAllVideos useEffect handles this
       return;
     }
     
-    // Evitar interrupciones de carga si ya estamos cambiando video
+    // Avoid loading interruptions if we're already changing video
     if (changingVideoRef.current) return;
     
-    // Para cambios de video normales
-    // Marcar que estamos cambiando video
+    // Mark that we're changing video
     changingVideoRef.current = true;
     
     try {
-      // Determinar cuál video está inactivo para precargar el nuevo
+      // Determine which video is inactive to preload the new one
       const inactiveVideoRef = activeVideoRef === 'primary' ? secondaryVideoRef : videoRef;
       const activeVideo = activeVideoRef === 'primary' ? videoRef.current : secondaryVideoRef.current;
       
-      // Configurar el video inactivo con la nueva fuente
+      // Configure the inactive video with the new source
       if (inactiveVideoRef.current) {
-        // Detener cualquier reproducción actual
+        // Stop any current playback
         inactiveVideoRef.current.pause();
         
-        // Configurar el video
+        // Configure the video
         inactiveVideoRef.current.muted = true;
         inactiveVideoRef.current.loop = true;
         inactiveVideoRef.current.style.opacity = '0';
         
-        // Definir un manejador para reproducir cuando esté listo
+        // Define a handler to play when ready
         const handleVideoLoaded = async () => {
           if (!inactiveVideoRef.current) return;
           
-          // Eliminar el evento para evitar llamadas duplicadas
+          // Remove the event to avoid duplicate calls
           inactiveVideoRef.current.removeEventListener('loadeddata', handleVideoLoaded);
           
-          // Solo reproducir si el video está en un estado adecuado
+          // Only play if the video is in an appropriate state
           if (inactiveVideoRef.current.readyState >= 3) {
             try {
+              // Make sure we're not making a play request immediately after a load request
+              await new Promise(resolve => setTimeout(resolve, 50));
               await inactiveVideoRef.current.play();
             } catch (error) {
               console.error("Error playing video:", error);
-              // Verificar si el error tiene la propiedad name
+              // Check if the error has the name property
               if (error instanceof Error && error.name === "NotAllowedError") {
                 inactiveVideoRef.current.setAttribute("muted", "");
-                inactiveVideoRef.current.play().catch(e => 
-                  console.error("Failed to recover from autoplay error:", e)
-                );
+                setTimeout(async () => {
+                  try {
+                    if (inactiveVideoRef.current) {
+                      await inactiveVideoRef.current.play();
+                    }
+                  } catch (e) {
+                    console.error("Failed to recover from autoplay error:", e);
+                  }
+                }, 100);
               }
             }
             
-            // Hacer visible el nuevo video
+            // Make the new video visible
             inactiveVideoRef.current.style.transition = 'opacity 500ms ease-in-out';
             inactiveVideoRef.current.style.opacity = '1';
           }
         };
         
-        // Agregar el evento y cargar el video
+        // Add the event and load the video
         inactiveVideoRef.current.addEventListener('loadeddata', handleVideoLoaded);
         inactiveVideoRef.current.src = videoList[currentVideoIndex];
-        console.log("Precargando nuevo video:", videoList[currentVideoIndex]);
+        console.log("Preloading new video:", videoList[currentVideoIndex]);
         inactiveVideoRef.current.load();
       }
       
-      // Desvanecer el video actual
+      // Fade out the current video
       if (activeVideo) {
         activeVideo.style.transition = 'opacity 500ms ease-in-out';
         activeVideo.style.opacity = '0';
       }
       
-      // Esperar a que termine la transición
-      await new Promise(resolve => setTimeout(resolve, 500)); // 500ms para la transición
+      // Wait for the transition to finish
+      await new Promise(resolve => setTimeout(resolve, 500)); // 500ms for the transition
       
-      // Cambiar la referencia activa
+      // Change the active reference
       setActiveVideoRef(activeVideoRef === 'primary' ? 'secondary' : 'primary');
       
-      // Actualizar la configuración
-      console.log("Video precargado correctamente");
+      // Update the configuration
+      console.log("Video preloaded successfully");
       animSettings.videoPath = videoList[currentVideoIndex];
       setVideoLoaded(true);
       
     } catch (error) {
-      console.error("Error al precargar video:", error);
+      console.error("Error preloading video:", error);
       setVideoLoaded(false);
     } finally {
-      // Ya no estamos cambiando video
+      // No longer changing video
       setTimeout(() => {
         changingVideoRef.current = false;
-      }, 1000); // Dar tiempo para que la transición termine
+      }, 1000); // Give time for the transition to finish
     }
   };
 
@@ -455,8 +490,16 @@ export default function SangreCanvas() {
           case 'light': return 'dark';
           case 'dark': return 'video';
           case 'video': 
-            // Al cambiar de video a light, avanzar al siguiente video
-            setCurrentVideoIndex(prev => (prev + 1) % videoList.length);
+            // Al cambiar de video a light, primero verificar si el siguiente video existe
+            const nextVideoIndex = (currentVideoIndex + 1) % videoList.length;
+            
+            // Verificar si el siguiente video está realmente disponible
+            const testVideoPath = videoList[nextVideoIndex];
+            console.log(`Comprobando disponibilidad del siguiente video: ${testVideoPath}`);
+            
+            // Avanzar al siguiente video después de verificar
+            setCurrentVideoIndex(nextVideoIndex);
+            
             return isProduction ? 'video' : 'light'; // En producción, siempre volver a video
           default: return 'light';
         }
@@ -913,33 +956,47 @@ export default function SangreCanvas() {
     const preloadVideos = () => {
       console.log("Intentando precargar videos:", videoList);
       
-      // Verificar que los videos existan
+      // Verificar que los archivos de video existan usando fetch
       videoList.forEach((videoUrl, index) => {
-        // Crear un elemento temporal para probar si el video es accesible
-        const testVideo = document.createElement('video');
-        testVideo.muted = true;
-        testVideo.style.display = 'none';
-        testVideo.onloadeddata = () => {
-          console.log(`✅ Video ${index} (${videoUrl}) cargado correctamente`);
-          document.body.removeChild(testVideo);
-        };
-        testVideo.onerror = (e) => {
-          console.error(`❌ Error al precargar video ${index} (${videoUrl}):`, e);
-          document.body.removeChild(testVideo);
-        };
-        
-        // Agregar al DOM temporalmente
-        document.body.appendChild(testVideo);
-        
-        // Intentar cargar
-        testVideo.src = videoUrl;
-        
-        // Crear enlaces preload
-        const link = document.createElement('link');
-        link.rel = 'preload';
-        link.href = videoUrl;
-        link.as = 'video';
-        document.head.appendChild(link);
+        // Intentar cargar el video con fetch para comprobar si existe
+        fetch(videoUrl, { method: 'HEAD' })
+          .then(response => {
+            if (response.ok) {
+              console.log(`✅ Video ${index} (${videoUrl}) verificado y accesible`);
+              
+              // Crear enlaces preload solo si el archivo existe
+              const link = document.createElement('link');
+              link.rel = 'preload';
+              link.href = videoUrl;
+              link.as = 'video';
+              document.head.appendChild(link);
+            } else {
+              console.error(`❌ Error: Video ${index} (${videoUrl}) no encontrado (${response.status})`);
+              
+              // Intentar con formato MP4 si el MOV no existe
+              if (videoUrl.endsWith('.mov')) {
+                const mp4Url = videoUrl.replace('.mov', '.mp4');
+                fetch(mp4Url, { method: 'HEAD' })
+                  .then(mp4Response => {
+                    if (mp4Response.ok) {
+                      console.log(`✅ Alternativa MP4 encontrada: ${mp4Url}`);
+                      // Crear enlace preload para la versión MP4
+                      const mp4Link = document.createElement('link');
+                      mp4Link.rel = 'preload';
+                      mp4Link.href = mp4Url;
+                      mp4Link.as = 'video';
+                      document.head.appendChild(mp4Link);
+                    } else {
+                      console.error(`❌ Error: Tampoco se encuentra versión MP4 (${mp4Response.status})`);
+                    }
+                  })
+                  .catch(error => console.error(`❌ Error al verificar MP4: ${error}`));
+              }
+            }
+          })
+          .catch(error => {
+            console.error(`❌ Error al verificar video ${index} (${videoUrl}):`, error);
+          });
       });
     };
     
@@ -1047,26 +1104,73 @@ export default function SangreCanvas() {
         loop
         playsInline
         preload="auto"
-        onPlay={() => console.log("Video primario reproduciendo")}
+        onCanPlayThrough={() => console.log("Primary video can play through now")}
+        onPlay={() => console.log("Primary video playing")}
+        onCanPlay={() => console.log("Primary video can play now")}
+        onLoadedData={() => console.log("Primary video data loaded")}
         onError={(e) => {
           // More detailed error logging
           const video = e.currentTarget;
-          console.error("Error en video primario:", {
+          
+          let errorInfo: {
+            message: string;
+            code?: number;
+            MEDIA_ERR_ABORTED?: boolean;
+            MEDIA_ERR_NETWORK?: boolean;
+            MEDIA_ERR_DECODE?: boolean;
+            MEDIA_ERR_SRC_NOT_SUPPORTED?: boolean;
+          } = {
+            message: "Unknown error"
+          };
+          
+          if (video.error) {
+            errorInfo = {
+              code: video.error.code,
+              message: video.error.message,
+              MEDIA_ERR_ABORTED: (video.error.code === 1),
+              MEDIA_ERR_NETWORK: (video.error.code === 2),
+              MEDIA_ERR_DECODE: (video.error.code === 3),
+              MEDIA_ERR_SRC_NOT_SUPPORTED: (video.error.code === 4)
+            };
+          }
+          
+          console.error("Error in primary video:", {
             event: e,
-            src: video.src,
+            src: video.src || "No source",
+            videoSrc: videoList[currentVideoIndex], // Show what should be the current source
+            videoList,
+            currentVideoIndex,
             networkState: video.networkState,
             readyState: video.readyState,
-            error: video.error ? {
-              code: video.error.code,
-              message: video.error.message
-            } : null
+            error: errorInfo
           });
           
-          // No intentar recuperación automática aquí para evitar ciclos de carga
+          // Recovery attempt: switch to MP4 or reload after a while
+          if (video.src.endsWith('.mov')) {
+            try {
+              console.log("Attempting to recover primary video with MP4 format");
+              const mp4Src = video.src.replace('.mov', '.mp4');
+              video.src = mp4Src;
+              video.load();
+            } catch (err) {
+              console.error("Error trying to recover with MP4:", err);
+            }
+          } else {
+            // Wait a bit and retry with the same source
+            setTimeout(() => {
+              try {
+                if (videoList[currentVideoIndex]) {
+                  console.log("Retrying primary video load after error");
+                  video.src = videoList[currentVideoIndex];
+                  video.load();
+                }
+              } catch (err) {
+                console.error("Error in primary video retry:", err);
+              }
+            }, 2000);
+          }
         }}
-      >
-        {/* Quitar source tags para evitar cargas competitivas */}
-      </video>
+      />
       
       {/* Video secundario (para transiciones suaves) */}
       <video 
@@ -1084,7 +1188,10 @@ export default function SangreCanvas() {
         loop
         playsInline
         preload="auto"
-        onPlay={() => console.log("Video secundario reproduciendo")}
+        onCanPlayThrough={() => console.log("Secondary video can play through now")}
+        onPlay={() => console.log("Secondary video playing")}
+        onCanPlay={() => console.log("Secondary video can play now")}
+        onLoadedData={() => console.log("Secondary video data loaded")}
         onError={(e) => {
           // More detailed error logging
           const video = e.currentTarget;
@@ -1097,7 +1204,7 @@ export default function SangreCanvas() {
             MEDIA_ERR_DECODE?: boolean;
             MEDIA_ERR_SRC_NOT_SUPPORTED?: boolean;
           } = {
-            message: "Error desconocido"
+            message: "Unknown error"
           };
           
           if (video.error) {
@@ -1111,9 +1218,10 @@ export default function SangreCanvas() {
             };
           }
           
-          console.error("Error en video secundario:", {
+          console.error("Error in secondary video:", {
             event: e,
             src: video.src || "No source",
+            videoSrc: videoList[currentVideoIndex], // Show what should be the current source
             videoList,
             currentVideoIndex,
             networkState: video.networkState,
@@ -1121,11 +1229,32 @@ export default function SangreCanvas() {
             error: errorInfo
           });
           
-          // No intentar recuperación automática aquí para evitar ciclos de carga
+          // Recovery attempt: switch to MP4 or reload after a while
+          if (video.src.endsWith('.mov')) {
+            try {
+              console.log("Attempting to recover secondary video with MP4 format");
+              const mp4Src = video.src.replace('.mov', '.mp4');
+              video.src = mp4Src;
+              video.load();
+            } catch (err) {
+              console.error("Error trying to recover with MP4:", err);
+            }
+          } else {
+            // Wait a bit and retry with the same source
+            setTimeout(() => {
+              try {
+                if (videoList[currentVideoIndex]) {
+                  console.log("Retrying secondary video load after error");
+                  video.src = videoList[currentVideoIndex];
+                  video.load();
+                }
+              } catch (err) {
+                console.error("Error in secondary video retry:", err);
+              }
+            }, 2000);
+          }
         }}
-      >
-        {/* Quitar source tags para evitar cargas competitivas */}
-      </video>
+      />
       
       <canvas
         ref={canvasRef}
