@@ -1089,7 +1089,7 @@ export default function SangreCanvas() {
       }}
     >
       {/* Video principal */}
-      <video 
+      {/* <video 
         ref={videoRef}
         style={{
           position: 'absolute',
@@ -1170,10 +1170,10 @@ export default function SangreCanvas() {
             }, 2000);
           }
         }}
-      />
+      /> */}
       
       {/* Video secundario (para transiciones suaves) */}
-      <video 
+      {/* <video 
         ref={secondaryVideoRef}
         style={{
           position: 'absolute',
@@ -1254,7 +1254,7 @@ export default function SangreCanvas() {
             }, 2000);
           }
         }}
-      />
+      /> */}
       
       <canvas
         ref={canvasRef}
